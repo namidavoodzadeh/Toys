@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06070b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Body Politic">
+<title>Body Politic — a governance lab</title>
+<style>
+  :root{
+    --bg:#06070b; --ink:#e9e4d8; --mute:#8d8a80;
+    --line:rgba(233,228,216,0.12); --panel:rgba(12,13,19,0.82);
+    --lamp:#f0b85a; --lamp-ink:#1c1304;
+    --teal:#3fd1a5; --violet:#c98bff; --rose:#ff6e6e; --blue:#4fc1ff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;
+    overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+  #app{height:100vh;height:100dvh;display:flex;flex-direction:column;
+    padding:calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 10px)}
+  #hud{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px 6px;gap:8px}
+  #hud .t{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;white-space:nowrap}
+  #hud .t b{font-weight:600}
+  #hud .t span{color:var(--mute)}
+  #yr{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;color:var(--lamp);letter-spacing:.1em;margin-left:auto}
+  #infoBtn{background:none;border:1px solid var(--line);color:var(--mute);border-radius:50%;
+    width:26px;height:26px;font-size:13px;line-height:1;cursor:pointer;padding:0;flex:none}
+  .pills{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .pills::-webkit-scrollbar{display:none}
+  .pills button{flex:none;background:var(--panel);border:1px solid var(--line);color:var(--mute);
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    padding:8px 10px;border-radius:10px;cursor:pointer;white-space:nowrap}
+  .pills button.on{color:var(--lamp);border-color:rgba(240,184,90,.6)}
+  #socRow button.on{color:var(--teal);border-color:rgba(63,209,165,.55)}
+  #world{flex:1;min-height:120px;border:1px solid var(--line);border-radius:14px;width:100%;touch-action:none}
+  #stat{width:100%;height:96px;border:1px solid var(--line);border-radius:12px;display:block;margin-top:8px}
+  #cap{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;letter-spacing:.06em;color:var(--mute);
+    text-transform:uppercase;padding:5px 4px 0;min-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #cap i{font-style:normal;color:var(--rose)}
+  #cap b{font-weight:600;color:var(--lamp)}
+  #dock{padding-top:6px}
+  #dials{display:none;padding:8px 10px 6px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:8px}
+  #dials.on{display:block}
+  .slider{display:grid;grid-template-columns:88px 1fr 36px;align-items:center;gap:10px;
+    font-size:10px;color:var(--mute);letter-spacing:.05em;text-transform:uppercase;margin:1px 0}
+  .slider output{text-align:right;color:var(--ink);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px}
+  input[type=range]{width:100%;accent-color:var(--lamp);height:26px;margin:0;background:transparent}
+  .row{display:flex;gap:7px;padding-top:2px}
+  .row button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    font:inherit;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    padding:12px 6px;border-radius:12px;flex:1;min-height:44px;cursor:pointer}
+  .row button:active{transform:scale(.97)}
+  .row button:focus-visible,.pills button:focus-visible,#infoBtn:focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+  .row button.warn{background:var(--rose);color:#2a0808;border-color:var(--rose);font-weight:700}
+  .row button.on{border-color:rgba(240,184,90,.7);color:var(--lamp)}
+  #info{display:none;position:fixed;inset:0;background:rgba(6,7,11,.94);z-index:9;
+    padding:calc(env(safe-area-inset-top) + 26px) 22px 30px;
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);overflow:auto}
+  #info.on{display:block}
+  #info h2{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--lamp);margin:0 0 12px}
+  #info p{font-size:13px;line-height:1.55;color:var(--ink);margin:0 0 10px}
+  #info p b{color:var(--lamp);font-weight:600}
+  #info .src{color:var(--mute);font-size:11px;line-height:1.5}
+  #info .hr{border-top:1px solid var(--line);margin:14px 0}
+  #info .close{margin-top:12px;width:100%;padding:13px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="t"><b>body politic</b> <span>· a governance lab</span></div>
+    <div id="yr">yr 0</div>
+    <button id="infoBtn" aria-label="how this regime was distilled">i</button>
+  </div>
+  <div class="pills" id="regRow"></div>
+  <div class="pills" id="socRow"></div>
+  <canvas id="world"></canvas>
+  <canvas id="stat"></canvas>
+  <div id="cap">—</div>
+  <div id="dock">
+    <div id="dials">
+      <label class="slider">repression<input type="range" id="d-rep" min="0" max="100"><output id="o-rep"></output></label>
+      <label class="slider">harshness<input type="range" id="d-harsh" min="0" max="100"><output id="o-harsh"></output></label>
+      <label class="slider">services<input type="range" id="d-serv" min="0" max="100"><output id="o-serv"></output></label>
+      <label class="slider">ideology<input type="range" id="d-ideo" min="0" max="100"><output id="o-ideo"></output></label>
+      <label class="slider">extraction<input type="range" id="d-ext" min="0" max="100"><output id="o-ext"></output></label>
+      <label class="slider">on unrest: concede ↔ crush<input type="range" id="d-resp" min="0" max="100"><output id="o-resp"></output></label>
+    </div>
+    <div class="row">
+      <button class="warn" id="crisis">Crisis</button>
+      <button id="speed">4×</button>
+      <button id="dialBtn">Dials</button>
+      <button id="pause">Pause</button>
+      <button id="reseed">Reseed</button>
+    </div>
+  </div>
+</div>
+
+<div id="info"><div id="infoBody"></div><button class="close" id="infoClose">back to power</button></div>
+
+<script>
+(() => {
+  const TAU = Math.PI * 2, rnd = Math.random;
+  const COL = { ink:'#e9e4d8', mute:'#8d8a80', lamp:'#f0b85a', teal:'#3fd1a5', violet:'#c98bff', rose:'#ff6e6e', bg:'#06070b', grey:'#565b66' };
+  const YEAR = 100; // steps per "year"
+
+  // ---------- regimes: name + distilled dials [rep, harsh, serv, ideo, ext, resp] ----------
+  const REGIMES = {
+    prince:      { name:'The Prince',        d:{rep:.75, harsh:.80, serv:.25, ideo:.50, ext:.15, resp:.90} },
+    leviathan:   { name:'Leviathan',         d:{rep:.95, harsh:.60, serv:.40, ideo:.30, ext:.20, resp:1.0} },
+    contract:    { name:'Social Contract',   d:{rep:.25, harsh:.15, serv:.75, ideo:.15, ext:.15, resp:0.0} },
+    theocracy:   { name:'Theocratic Rep.',   d:{rep:.70, harsh:.75, serv:.30, ideo:.85, ext:.60, resp:.95} },
+    development: { name:'Developmental',     d:{rep:.60, harsh:.35, serv:.90, ideo:.50, ext:.20, resp:.60} },
+    failed:      { name:'Failed State',      d:{rep:.05, harsh:.90, serv:.05, ideo:.05, ext:.90, resp:1.0} },
+  };
+  const SOCIETIES = {
+    settled:  { name:'Settled & Older',  hard:u=>u*0.5,               risk:u=>0.3+u*0.7, vision:42, scar:0.7 },
+    unequal:  { name:'Unequal & Young',  hard:u=>Math.pow(u,0.7)*0.8, risk:u=>u*0.7,     vision:52, scar:1.0 },
+    wired:    { name:'Wired & Restless', hard:u=>u*0.65,              risk:u=>u*0.8,     vision:84, scar:1.5 },
+  };
+
+  // ---------- simulation core (UI-free, testable) ----------
+  const COP_VISION = 45; // batons are local; information (soc.vision) is not
+  function makeSim(dials, socKey, W, H) {
+    const soc = SOCIETIES[socKey];
+    const N = 650;
+    const S = {
+      d: {...dials}, soc: socKey, W, H, N, t: 0,
+      px:new Float32Array(N), py:new Float32Array(N), hd:new Float32Array(N),
+      base:new Float32Array(N), radical:new Float32Array(N), hard:new Float32Array(N), risk:new Float32Array(N),
+      st:new Uint8Array(N),      // 0 quiet 1 active 2 jailed
+      jail:new Int32Array(N), believer:new Uint8Array(N),
+      E:0, scarS:0, anger:0, L:0.5,
+      cx:new Float32Array(90), cy:new Float32Array(90), chd:new Float32Array(90), cool:new Int32Array(90), nCops:0,
+      burst:false, lastBurstEnd:-1e9, burstStarts:[], intervals:[], arrestsThisStep:0,
+      activeFrac:0, meanHard:0,
+    };
+    for (let i = 0; i < N; i++) {
+      S.px[i] = rnd()*W; S.py[i] = rnd()*H; S.hd[i] = rnd()*TAU;
+      S.base[i] = soc.hard(rnd()); S.risk[i] = soc.risk(rnd());
+      S.hard[i] = S.base[i];
+    }
+    for (let i = 0; i < 90; i++) { S.cx[i] = rnd()*W; S.cy[i] = rnd()*H; S.chd[i] = rnd()*TAU; }
+    assignBelievers(S);
+    S.L = baseLegit(S);
+    return S;
+  }
+  function assignBelievers(S) {
+    const f = S.d.ideo * 0.4;
+    for (let i = 0; i < S.N; i++) S.believer[i] = rnd() < f ? 1 : 0;
+  }
+  function baseLegit(S) {
+    return Math.max(0.05, Math.min(0.95,
+      0.35 + 0.55*S.d.serv + 0.22*S.d.ideo - 0.40*S.d.ext - S.scarS));
+  }
+  function wrap(v, M) { return v < 0 ? v + M : v >= M ? v - M : v; }
+
+  function step(S) {
+    const { N, W, H, d } = S, soc = SOCIETIES[S.soc];
+    const inBurst = S.burst;
+    const crush = d.resp, concede = 1 - d.resp;
+    S.nCops = Math.round(N * 0.115 * d.rep * (inBurst ? 1 + 0.8*crush : 1));
+    if (S.nCops > 90) S.nCops = 90;
+
+    // --- move civilians ---
+    for (let i = 0; i < N; i++) {
+      if (S.st[i] === 2) continue;
+      S.hd[i] += (rnd()*2-1) * 0.4;
+      const sp = S.st[i] === 1 ? 0.8 : 0.5;
+      S.px[i] = wrap(S.px[i] + Math.cos(S.hd[i])*sp, W);
+      S.py[i] = wrap(S.py[i] + Math.sin(S.hd[i])*sp, H);
+    }
+    // --- bin actives at social vision; bin cops at physical vision ---
+    const av = soc.vision, ac = Math.max(1, Math.ceil(W/av)), ar = Math.max(1, Math.ceil(H/av));
+    const actCnt = new Int16Array(ac*ar);
+    const headA = new Int32Array(ac*ar).fill(-1), nxt = new Int32Array(N);
+    for (let i = 0; i < N; i++) {
+      if (S.st[i] === 2) continue;
+      const c = Math.min(ar-1, (S.py[i]/av)|0)*ac + Math.min(ac-1, (S.px[i]/av)|0);
+      nxt[i] = headA[c]; headA[c] = i;
+      if (S.st[i] === 1) actCnt[c]++;
+    }
+    const pv = COP_VISION, pc = Math.max(1, Math.ceil(W/pv)), pr = Math.max(1, Math.ceil(H/pv));
+    const copCnt = new Int16Array(pc*pr);
+    for (let k = 0; k < S.nCops; k++) {
+      const c = Math.min(pr-1, (S.cy[k]/pv)|0)*pc + Math.min(pc-1, (S.cx[k]/pv)|0);
+      copCnt[c]++;
+    }
+    const sum9 = (arr, gc, gr, cxi, cyi) => {
+      let s = 0;
+      for (let dy=-1; dy<=1; dy++) for (let dx=-1; dx<=1; dx++)
+        s += arr[((cyi+dy+gr)%gr)*gc + ((cxi+dx+gc)%gc)];
+      return s;
+    };
+
+    // --- civilian decisions (Epstein 2002 + endogenous L) ---
+    const harshNet = 0.25 + 0.75*d.harsh*(inBurst ? 1 + 0.5*crush : 1);
+    let nAct = 0, hardSum = 0;
+    for (let i = 0; i < N; i++) {
+      // hardship = personal base + economy + accumulated radicalization
+      S.radical[i] *= 0.99996;
+      S.hard[i] = Math.max(0.02, Math.min(1, S.base[i] + S.E + S.radical[i]));
+      hardSum += S.hard[i];
+      if (S.st[i] === 2) {
+        if (--S.jail[i] <= 0) { S.st[i] = 0; S.radical[i] = Math.min(0.3, S.radical[i] + 0.09); }
+        continue;
+      }
+      const A = sum9(actCnt, ac, ar, Math.min(ac-1,(S.px[i]/av)|0), Math.min(ar-1,(S.py[i]/av)|0));
+      const C = sum9(copCnt, pc, pr, Math.min(pc-1,(S.px[i]/pv)|0), Math.min(pr-1,(S.py[i]/pv)|0));
+      const P = 1 - Math.exp(-2.3 * (C + 1) / (A + 1));
+      const Li = S.believer[i] ? Math.min(1, S.L + 0.45*d.ideo) : S.L;
+      const G = S.hard[i] * (1 - Li);
+      const netRisk = S.risk[i] * P * harshNet;
+      if (S.st[i] === 0 && G - netRisk > 0.12) S.st[i] = 1;
+      else if (S.st[i] === 1 && G - netRisk < 0.08) S.st[i] = 0;
+      if (S.st[i] === 1) nAct++;
+    }
+    S.meanHard = hardSum / N;
+
+    // --- cops: patrol + arrest ---
+    S.arrestsThisStep = 0;
+    for (let k = 0; k < S.nCops; k++) {
+      S.chd[k] += (rnd()*2-1)*0.5;
+      S.cx[k] = wrap(S.cx[k] + Math.cos(S.chd[k])*1.0, W);
+      S.cy[k] = wrap(S.cy[k] + Math.sin(S.chd[k])*1.0, H);
+      if (S.cool[k] > 0) { S.cool[k]--; continue; }
+      const cxi = Math.min(ac-1, (S.cx[k]/av)|0), cyi = Math.min(ar-1, (S.cy[k]/av)|0);
+      let target = -1;
+      outer:
+      for (let dy=-1; dy<=1; dy++) for (let dx=-1; dx<=1; dx++) {
+        const c = ((cyi+dy+ar)%ar)*ac + ((cxi+dx+ac)%ac);
+        for (let j = headA[c]; j !== -1; j = nxt[j]) if (S.st[j] === 1) {
+          const ddx = Math.abs(S.px[j]-S.cx[k]), ddy = Math.abs(S.py[j]-S.cy[k]);
+          if (Math.min(ddx, W-ddx) < COP_VISION && Math.min(ddy, H-ddy) < COP_VISION) { target = j; break outer; }
+        }
+      }
+      if (target >= 0) {
+        const A9 = sum9(actCnt, ac, ar, cxi, cyi);
+        if (rnd() > Math.min(1, 5/(A9+1))) { S.cool[k] = 6; continue; } // overwhelmed by the crowd
+        S.st[target] = 2; S.jail[target] = Math.round(120 + 380*d.harsh);
+        S.cool[k] = 30;
+        S.arrestsThisStep++;
+      }
+    }
+
+    // --- legitimacy dynamics: sub-linear scarring, slow healing ---
+    const scarRate = 0.00010 * (0.3 + d.harsh) * soc.scar * (1 + 0.8*d.ideo);
+    const excessArr = Math.max(0, S.arrestsThisStep - 1);
+    S.scarS += Math.sqrt(excessArr) * scarRate;
+    S.scarS *= 0.999900;                             // slow societal forgetting (~ century half-life)
+    if (inBurst && concede > 0) S.scarS -= 0.00050*concede;   // reforms heal memory faster
+    S.scarS = Math.max(0, Math.min(0.40, S.scarS));
+    S.anger = S.anger*0.985 + S.arrestsThisStep * 0.0022;
+    const Lb = baseLegit(S);
+    S.L += (Lb - S.L)*0.012 - S.anger*0.01 + (inBurst ? 0.0015*concede : 0);
+    S.L = Math.max(0.02, Math.min(0.98, S.L));
+
+    // --- economy: single bounded state ---
+    S.E += 0.000020*d.ext - 0.000028*d.serv + (inBurst ? -0.00016*concede : 0);
+    S.E = Math.max(-0.18, Math.min(0.45, S.E));
+
+    // --- burst bookkeeping (grace period: first 3 years) ---
+    S.activeFrac = nAct / N;
+    if (!S.burst && S.activeFrac > 0.08 && S.t - S.lastBurstEnd > 150 && S.t > 3*YEAR) {
+      S.burst = true;
+      const yr = S.t / YEAR;
+      if (S.burstStarts.length) S.intervals.push(yr - S.burstStarts[S.burstStarts.length-1]);
+      S.burstStarts.push(yr);
+    } else if (S.burst && S.activeFrac < 0.03) { S.burst = false; S.lastBurstEnd = S.t; }
+    S.t++;
+  }
+  function shockCrisis(S) { S.E = Math.min(0.45, S.E + 0.13); S.scarS = Math.min(0.40, S.scarS + 0.07); S.anger += 0.04; S.L = Math.max(0.02, S.L - 0.06); }
+  function shockInjustice(S, x, y) {
+    const soc = SOCIETIES[S.soc];
+    S.anger += 0.02 * (soc.vision/50);
+    S.scarS = Math.min(0.45, S.scarS + 0.006 * soc.scar);
+    for (let i = 0; i < S.N; i++) {
+      const dx = S.px[i]-x, dy = S.py[i]-y;
+      if (dx*dx+dy*dy < 80*80) S.radical[i] = Math.min(0.3, S.radical[i] + 0.05);
+    }
+  }
+
+  // ---------- UI ----------
+  const world = document.getElementById('world'), stat = document.getElementById('stat');
+  const wc = world.getContext('2d', { alpha:false }), sc = stat.getContext('2d', { alpha:false });
+  const cap = document.getElementById('cap'), $ = id => document.getElementById(id);
+  let DPR = 1, WW = 0, WH = 0, SW = 0, SH = 0;
+  function sizeCanvas(cv, cx) {
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.max(1, Math.floor(r.width*DPR)); cv.height = Math.max(1, Math.floor(r.height*DPR));
+    cx.setTransform(DPR,0,0,DPR,0,0); return [r.width, r.height];
+  }
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    [WW,WH] = sizeCanvas(world, wc); [SW,SH] = sizeCanvas(stat, sc);
+    if (sim) { sim.W = WW; sim.H = WH; }
+  }
+  window.addEventListener('resize', resize);
+
+  let regime = 'theocracy', society = 'unequal', modified = false;
+  let sim = null, running = true, fast = false;
+  const hist = { act:[], L:[], hard:[], marks:[] };
+  function newSim() {
+    sim = makeSim(REGIMES[regime].d, society, WW, WH);
+    hist.act.length = hist.L.length = hist.hard.length = hist.marks.length = 0;
+    modified = false; syncDials();
+  }
+
+  // pills
+  function buildPills(rowId, dict, cur, onPick) {
+    const row = $(rowId); row.innerHTML = '';
+    for (const k in dict) {
+      const b = document.createElement('button');
+      b.textContent = dict[k].name; b.dataset.k = k;
+      b.classList.toggle('on', k === cur);
+      b.addEventListener('click', () => { onPick(k); [...row.children].forEach(x => x.classList.toggle('on', x.dataset.k === k)); });
+      row.appendChild(b);
+    }
+  }
+  buildPills('regRow', REGIMES, regime, k => {
+    regime = k; modified = false;
+    if (sim) { sim.d = {...REGIMES[k].d}; assignBelievers(sim); syncDials(); } // live regime change — no reseed
+  });
+  buildPills('socRow', SOCIETIES, society, k => { society = k; newSim(); });
+
+  // dials
+  const DIAL_KEYS = ['rep','harsh','serv','ideo','ext','resp'];
+  function syncDials() {
+    for (const k of DIAL_KEYS) { $('d-'+k).value = Math.round(sim.d[k]*100); $('o-'+k).textContent = Math.round(sim.d[k]*100); }
+  }
+  DIAL_KEYS.forEach(k => $('d-'+k).addEventListener('input', e => {
+    sim.d[k] = e.target.value/100; $('o-'+k).textContent = e.target.value;
+    if (k === 'ideo') assignBelievers(sim);
+    modified = true;
+  }));
+  $('dialBtn').addEventListener('click', e => { $('dials').classList.toggle('on'); e.currentTarget.classList.toggle('on'); });
+
+  $('crisis').addEventListener('click', () => shockCrisis(sim));
+  $('speed').addEventListener('click', e => { fast = !fast; e.currentTarget.classList.toggle('on', fast); });
+  $('pause').addEventListener('click', e => { running = !running; e.currentTarget.textContent = running ? 'Pause' : 'Play'; });
+  $('reseed').addEventListener('click', newSim);
+  world.addEventListener('pointerdown', e => {
+    const r = world.getBoundingClientRect();
+    shockInjustice(sim, e.clientX - r.left, e.clientY - r.top);
+  });
+
+  // drawing
+  function drawWorld() {
+    wc.fillStyle = COL.bg; wc.fillRect(0,0,WW,WH);
+    const S = sim;
+    // jailed
+    wc.fillStyle = 'rgba(201,139,255,.6)'; wc.beginPath();
+    for (let i=0;i<S.N;i++){ if(S.st[i]!==2) continue; wc.moveTo(S.px[i]+1.3,S.py[i]); wc.arc(S.px[i],S.py[i],1.3,0,TAU); }
+    wc.fill();
+    // quiet non-believers
+    wc.fillStyle = 'rgba(233,228,216,.32)'; wc.beginPath();
+    for (let i=0;i<S.N;i++){ if(S.st[i]!==0||S.believer[i]) continue; wc.moveTo(S.px[i]+1.8,S.py[i]); wc.arc(S.px[i],S.py[i],1.8,0,TAU); }
+    wc.fill();
+    // quiet believers
+    wc.fillStyle = 'rgba(63,209,165,.45)'; wc.beginPath();
+    for (let i=0;i<S.N;i++){ if(S.st[i]!==0||!S.believer[i]) continue; wc.moveTo(S.px[i]+1.8,S.py[i]); wc.arc(S.px[i],S.py[i],1.8,0,TAU); }
+    wc.fill();
+    // actives
+    wc.fillStyle = COL.rose; wc.beginPath();
+    for (let i=0;i<S.N;i++){ if(S.st[i]!==1) continue; wc.moveTo(S.px[i]+2.6,S.py[i]); wc.arc(S.px[i],S.py[i],2.6,0,TAU); }
+    wc.fill();
+    // cops
+    wc.fillStyle = COL.lamp;
+    for (let k=0;k<S.nCops;k++) wc.fillRect(S.cx[k]-2, S.cy[k]-2, 4, 4);
+  }
+  function pushH(v){ hist.act.push(v.a); hist.L.push(v.l); hist.hard.push(v.h);
+    const cap_ = 560; if (hist.act.length>cap_){ hist.act.shift(); hist.L.shift(); hist.hard.shift(); hist.marks.forEach((m,i)=>hist.marks[i]=m-1); while(hist.marks.length&&hist.marks[0]<0)hist.marks.shift(); } }
+  function drawStat() {
+    sc.fillStyle = '#090a10'; sc.fillRect(0,0,SW,SH);
+    const n = hist.act.length; if (n < 2) return;
+    const X = i => 6 + i/(559)*(SW-12);
+    // active area
+    sc.fillStyle = 'rgba(255,110,110,.4)'; sc.beginPath(); sc.moveTo(X(0), SH-6);
+    for (let i=0;i<n;i++) sc.lineTo(X(i), SH-6 - Math.min(1,hist.act[i]*2)*(SH-14));
+    sc.lineTo(X(n-1), SH-6); sc.closePath(); sc.fill();
+    // burst marks
+    sc.fillStyle = COL.rose;
+    for (const m of hist.marks) { sc.beginPath(); sc.moveTo(X(m), 4); sc.lineTo(X(m)-3, 10); sc.lineTo(X(m)+3, 10); sc.closePath(); sc.fill(); }
+    // L + hardship lines
+    const line = (arr, col) => { sc.strokeStyle = col; sc.lineWidth = 1.4; sc.beginPath();
+      for (let i=0;i<n;i++){ const y = SH-6 - arr[i]*(SH-14); i?sc.lineTo(X(i),y):sc.moveTo(X(i),y); } sc.stroke(); };
+    line(hist.L, COL.lamp); line(hist.hard, COL.grey);
+  }
+  function fmtIntervals(S) {
+    if (!S.intervals.length) return S.burstStarts.length ? `first uprising · yr ${S.burstStarts[0]|0}` : 'no uprisings yet';
+    const last = S.intervals.slice(-4).map(v => (v<10? v.toFixed(1): v|0)+'y');
+    return `intervals: ${last.join(' → ')}`;
+  }
+
+  let frames = 0;
+  function loop() {
+    if (running) {
+      const k = fast ? 4 : 1;
+      for (let s = 0; s < k; s++) {
+        const wasBurst = sim.burst;
+        step(sim);
+        if (!wasBurst && sim.burst) hist.marks.push(hist.act.length);
+        if (sim.t % 2 === 0) pushH({ a:sim.activeFrac, l:sim.L, h:sim.meanHard });
+      }
+    }
+    drawWorld(); drawStat();
+    if (++frames % 10 === 0 || !running) {
+      $('yr').textContent = 'yr ' + ((sim.t/YEAR)|0);
+      const name = REGIMES[regime].name + (modified ? ' ·mod' : '');
+      cap.innerHTML = `<b>${name}</b> · L ${(sim.L*100)|0} · <i>rising ${(sim.activeFrac*100)|0}%</i> · ${fmtIntervals(sim)}`;
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- distillation cards ----------
+  const CARDS = {
+    prince: `<h2>the prince · machiavelli, 1532</h2>
+      <p><b>Distilled to 4 rules:</b> ① It is safer to be feared than loved — repression 75, harshness 80. ② But above all, never hated: do not prey on the people's property and dignity — extraction 15. ③ Appear virtuous; control the story — ideology 50. ④ Crush challenges swiftly and completely — respond: crush.</p>
+      <p><b>What to watch:</b> remarkably stable for a long time — fear works, and low predation keeps hatred from accumulating. But every crackdown leaves a scar, and scars only add up. Watch legitimacy (gold line) ratchet down across decades.</p>
+      <p class="src">Left out: the republican Machiavelli of the Discourses, fortuna, and elite conspiracies — this world has no rival princes, only a prince and a people.</p>`,
+    leviathan: `<h2>leviathan · hobbes, 1651</h2>
+      <p><b>Distilled to 3 rules:</b> ① Any order beats the war of all against all — repression 95. ② The sovereign owes security, not prosperity — services 40. ③ There is no right of rebellion — respond: crush.</p>
+      <p><b>What to watch:</b> near-total quiet under overwhelming enforcement. The question Hobbes never priced in: what the surveillance itself slowly costs in legitimacy. Compare with Failed State — his actual nightmare — to see what he was arguing against.</p>
+      <p class="src">Left out: the consent-based founding moment; Hobbes' sovereign is chosen once, then absolute.</p>`,
+    contract: `<h2>social contract · locke, 1689</h2>
+      <p><b>Distilled to 3 rules:</b> ① Legitimacy flows from consent — when people rise, the government reforms rather than shoots (respond: concede). ② Govern lightly — repression 25, harshness 15. ③ Deliver prosperity and protect property — services 75, extraction 15.</p>
+      <p><b>What to watch:</b> unrest still happens — but bursts trigger concessions, hardship falls, legitimacy self-heals. The system bends and doesn't ratchet. Press Crisis and watch it absorb the blow.</p>
+      <p class="src">Left out: elections (approximated here as automatic concession), courts, and the slow failure mode Locke feared — a majority preying on a minority.</p>`,
+    theocracy: `<h2>theocratic republic · archetype</h2>
+      <p><b>Distilled to 4 rules:</b> ① A believer core grants loyalty independent of performance — ideology 85 (teal dots). ② Sacred authority cannot concede without unraveling — respond: crush. ③ Virtue is enforced visibly — harshness 75. ④ The economy serves insiders — extraction 60.</p>
+      <p><b>What to watch:</b> ideological legitimacy is high but brittle — every visible crackdown wounds it extra (preference falsification: people hide dissent until crowds make it safe, so eruptions arrive by surprise). Watch the interval readout: uprisings arrive closer and closer together.</p>
+      <p class="src">An archetype of ideology-anchored authoritarianism — not a model of any one country. Mechanisms: Epstein (2002), Kuran, "Now Out of Never" (1991).</p>`,
+    development: `<h2>developmental autocracy · archetype</h2>
+      <p><b>Distilled to 3 rules:</b> ① Performance legitimacy: deliver growth, demand quiet — services 90. ② Firm, low-drama policing — repression 60, harshness 35. ③ Manage the story — ideology 50.</p>
+      <p><b>What to watch:</b> hardship (grey line) falls year after year, and almost nobody rises. The entire bargain rests on that line falling. Press Crisis and watch what performance legitimacy is worth on the day performance stops.</p>
+      <p class="src">Archetype of Singapore/East-Asian developmental states. Left out: middle-class expectations rising faster than delivery.</p>`,
+    failed: `<h2>failed state</h2>
+      <p><b>Distilled to 3 rules:</b> ① No services, no protection — services 5. ② Whoever is armed, extracts — extraction 90. ③ What violence exists is arbitrary and harsh — harshness 90, repression 5.</p>
+      <p><b>What to watch:</b> no dramatic revolutions — just chronic, simmering unrest that never resolves, because there is no legitimacy left to lose and no order to overthrow. The baseline every other regime should be judged against.</p>
+      <p class="src">This is Hobbes' state of nature — switch to Leviathan mid-simmer and watch his whole argument play out.</p>`,
+  };
+  const FOOT = `<div class="hr"></div>
+    <p class="src"><b style="color:var(--mute)">Societies:</b> Settled &amp; Older — mild hardship, cautious, low connectivity. Unequal &amp; Young — skewed hardship, risk-tolerant. Wired &amp; Restless — high connectivity: everyone sees everything, outrage travels, cascades come fast.</p>
+    <p class="src"><b style="color:var(--mute)">Honesty:</b> this shows mechanisms, not history. Rules come from the texts; constants are tuned for playability. If a regime's fingerprint here matches a real one — bursts, surprise cascades, compressing intervals — that is evidence the mechanism is <i>sufficient</i> to produce the pattern, never proof it is what happened. Engine: Epstein's civil-violence model (PNAS 2002) with endogenous legitimacy.</p>`;
+  $('infoBtn').addEventListener('click', () => { $('infoBody').innerHTML = CARDS[regime] + FOOT; $('info').classList.add('on'); });
+  $('infoClose').addEventListener('click', () => $('info').classList.remove('on'));
+
+  // ---------- go ----------
+  resize();
+  newSim();
+  requestAnimationFrame(loop);
+  window.LAB = { makeSim, step, shockCrisis, REGIMES, SOCIETIES,
+    head(reg, socKey, steps, crisisYears) {
+      const s = makeSim(REGIMES[reg].d, socKey, 360, 420);
+      const cy = (crisisYears || []).map(y => y*100);
+      for (let t = 0; t < steps; t++) { if (cy.includes(t)) shockCrisis(s); step(s); }
+      return { bursts: s.burstStarts.map(v=>+v.toFixed(1)), intervals: s.intervals.map(v=>+v.toFixed(1)),
+               L:+s.L.toFixed(2), scar:+s.scarS.toFixed(2), act:+s.activeFrac.toFixed(3), hard:+s.meanHard.toFixed(2) };
+    } };
+})();
+</script>
+</body>
+</html>
