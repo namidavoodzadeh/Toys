@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06070b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Signal&Noise">
+<title>Signal & Noise — a life dynamics sketchpad</title>
+<style>
+  :root{
+    --bg:#06070b; --ink:#e9e4d8; --mute:#8d8a80;
+    --line:rgba(233,228,216,0.12); --panel:rgba(12,13,19,0.82);
+    --lamp:#f0b85a; --lamp-ink:#1c1304;
+    --teal:#3fd1a5; --violet:#c98bff; --rose:#ff6e6e; --blue:#4fc1ff; --sand:#d8c39a;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;
+    overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  #app{height:100vh;height:100dvh;display:flex;flex-direction:column;
+    padding:calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 10px)}
+  #hud{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px 6px;gap:8px}
+  #hud .t{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;white-space:nowrap}
+  #hud .t b{font-weight:600}
+  #hud .t span{color:var(--mute)}
+  #infoBtn{background:none;border:1px solid var(--line);color:var(--mute);border-radius:50%;
+    width:26px;height:26px;font-size:13px;line-height:1;cursor:pointer;padding:0;flex:none;margin-left:auto}
+  .pills{display:flex;gap:6px;padding-bottom:6px}
+  .pills button{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--mute);
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    padding:9px 4px;border-radius:10px;cursor:pointer;white-space:nowrap}
+  .pills button.on{color:var(--lamp);border-color:rgba(240,184,90,.6)}
+  #chart{flex:1;min-height:150px;border:1px solid var(--line);border-radius:14px;width:100%;touch-action:none}
+  #chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 2px 0}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:6px 9px;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+  .chip.off{opacity:.35}
+  #cap{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;letter-spacing:.06em;color:var(--mute);
+    text-transform:uppercase;padding:7px 4px 0;min-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #cap b{font-weight:600;color:var(--lamp)}
+  #cap i{font-style:normal;color:var(--rose)}
+  #dock{padding-top:8px}
+  .sliders{display:none;padding:8px 10px 6px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:8px;max-height:36vh;overflow:auto}
+  .sliders.on{display:block}
+  .slider{display:grid;grid-template-columns:104px 1fr 34px;align-items:center;gap:10px;
+    font-size:10px;color:var(--mute);letter-spacing:.05em;text-transform:uppercase;margin:1px 0}
+  .slider output{text-align:right;color:var(--ink);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px}
+  input[type=range]{width:100%;accent-color:var(--lamp);height:26px;margin:0;background:transparent}
+  .shape{display:grid;grid-template-columns:104px 1fr;gap:10px;align-items:center;margin:6px 0 2px;
+    font-size:10px;color:var(--mute);letter-spacing:.05em;text-transform:uppercase}
+  .shape button{background:var(--panel);border:1px solid var(--line);color:var(--teal);border-radius:8px;padding:7px;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+  .row{display:flex;gap:7px;padding-top:2px}
+  .row button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    font:inherit;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    padding:12px 6px;border-radius:12px;flex:1;min-height:44px;cursor:pointer}
+  .row button:active{transform:scale(.97)}
+  .row button:focus-visible,.pills button:focus-visible,#infoBtn:focus-visible,.chip:focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+  .row button.on{border-color:rgba(240,184,90,.7);color:var(--lamp)}
+  #toast{position:fixed;left:50%;top:30%;transform:translateX(-50%);max-width:86vw;text-align:center;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink);background:rgba(12,13,19,.85);border:1px solid var(--line);border-radius:10px;padding:9px 14px;
+    opacity:0;transition:opacity .35s;pointer-events:none;line-height:1.7;z-index:8}
+  #info{display:none;position:fixed;inset:0;background:rgba(6,7,11,.95);z-index:9;
+    padding:calc(env(safe-area-inset-top) + 26px) 22px 30px;
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);overflow:auto}
+  #info.on{display:block}
+  #info h2{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--lamp);margin:16px 0 10px}
+  #info h2:first-child{margin-top:0}
+  #info p{font-size:13px;line-height:1.55;color:var(--ink);margin:0 0 10px}
+  #info p b{color:var(--lamp);font-weight:600}
+  #info .src{color:var(--mute);font-size:11px;line-height:1.5}
+  #info .close{margin-top:12px;width:100%;padding:13px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="t"><b>signal &amp; noise</b> <span>· a life dynamics sketchpad</span></div>
+    <button id="infoBtn" aria-label="what this is and is not">i</button>
+  </div>
+  <div class="pills" id="scenes">
+    <button data-s="move" class="on">The Move</button>
+    <button data-s="cold">The Cold Shoulder</button>
+    <button data-s="sandbox">Sandbox</button>
+  </div>
+  <canvas id="chart"></canvas>
+  <div id="chips"></div>
+  <div id="cap">—</div>
+  <div id="dock">
+    <div class="sliders" id="s-move">
+      <label class="slider">move day<input type="range" id="m-day" min="30" max="180" value="60"><output id="om-day">60</output></label>
+      <label class="slider">pre-move anxiety<input type="range" id="m-anx" min="0" max="8" value="5"><output id="om-anx">5</output></label>
+      <label class="slider">new-home joy<input type="range" id="m-joy" min="0" max="8" value="6"><output id="om-joy">6</output></label>
+      <label class="slider">hedonic adaptation<input type="range" id="m-adapt" min="0" max="100" value="60"><output id="om-adapt">60%</output></label>
+      <label class="slider">commute change<input type="range" id="m-comm" min="-6" max="6" value="2"><output id="om-comm">+2</output></label>
+      <label class="slider">friends now farther<input type="range" id="m-fri" min="0" max="6" value="2"><output id="om-fri">2</output></label>
+    </div>
+    <div class="sliders" id="s-cold">
+      <label class="slider">daily warmth<input type="range" id="c-warm" min="0" max="8" value="4"><output id="oc-warm">4</output></label>
+      <label class="slider">the insult stings<input type="range" id="c-sting" min="0" max="8" value="4"><output id="oc-sting">4</output></label>
+      <label class="slider">sting memory (days)<input type="range" id="c-tau" min="1" max="14" value="3"><output id="oc-tau">3</output></label>
+      <label class="slider">go cold for (days)<input type="range" id="c-cold" min="0" max="30" value="14"><output id="oc-cold">14</output></label>
+    </div>
+    <div class="sliders" id="s-sandbox"></div>
+    <div class="row">
+      <button id="sumOnly">Sum only</button>
+      <button id="dialBtn" class="on">Dials</button>
+      <button id="reset">Reset</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="info"><div id="infoBody"></div><button class="close" id="infoClose">back to the sketchpad</button></div>
+
+<script>
+(() => {
+  const DAYS = 365, rnd = Math.random;
+  const COL = { ink:'#e9e4d8', mute:'#8d8a80', lamp:'#f0b85a', teal:'#3fd1a5', violet:'#c98bff', rose:'#ff6e6e', blue:'#4fc1ff', sand:'#d8c39a', bg:'#06070b' };
+  const $ = id => document.getElementById(id);
+  const chart = $('chart'), cc = chart.getContext('2d', { alpha:false });
+  const cap = $('cap');
+  let DPR = 1, CW = 0, CH = 0;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    const r = chart.getBoundingClientRect();
+    chart.width = Math.floor(r.width*DPR); chart.height = Math.floor(r.height*DPR);
+    cc.setTransform(DPR,0,0,DPR,0,0); CW = r.width; CH = r.height;
+    render();
+  }
+  window.addEventListener('resize', resize);
+  const toastEl = $('toast'); let toastTimer;
+  function toast(msg, ms=2000){ toastEl.innerHTML = msg; toastEl.style.opacity = 1; clearTimeout(toastTimer); toastTimer = setTimeout(()=>toastEl.style.opacity=0, ms); }
+
+  // ---------- curve library (closed-form, per-day arrays) ----------
+  const arr = () => new Float32Array(DAYS);
+  function anticipate(t0, A, rampTau, dropTau) { const y = arr();
+    for (let t = 0; t < DAYS; t++) y[t] = t < t0 ? A*Math.exp(-(t0-t)/rampTau) : A*Math.exp(-(t-t0)/dropTau);
+    return y; }
+  function pulse(t0, A, tau) { const y = arr();
+    for (let t = t0; t < DAYS; t++) y[t] = A*Math.exp(-(t-t0)/tau);
+    return y; }
+  function stepAdapt(t0, A, adaptFrac, tau) { const y = arr();
+    for (let t = t0; t < DAYS; t++) y[t] = A*((1-adaptFrac) + adaptFrac*Math.exp(-(t-t0)/tau));
+    return y; }
+  function rampSat(t0, A, tau) { const y = arr();
+    for (let t = t0; t < DAYS; t++) y[t] = A*(1-Math.exp(-(t-t0)/tau));
+    return y; }
+  function rhythm(A, period) { const y = arr();
+    for (let t = 0; t < DAYS; t++) y[t] = A*Math.sin(2*Math.PI*t/period);
+    return y; }
+  function smooth(input, tau) { const y = arr(); let s = input[0];
+    for (let t = 0; t < DAYS; t++) { s += (input[t]-s)/tau; y[t] = s; }
+    return y; }
+  const integral = y => { let s = 0; for (let t = 0; t < DAYS; t++) s += y[t]; return s; };
+
+  // ---------- state ----------
+  let scene = 'move', sumOnly = false;
+  const P = {
+    move: { day:60, anx:5, joy:6, adapt:0.6, comm:2, fri:2 },
+    cold: { warm:4, sting:4, tau:3, cold:14 },
+    sandbox: [
+      { shape:1, size:4, day:60,  mem:30 },
+      { shape:3, size:3, day:150, mem:6 },
+      { shape:0, size:3, day:100, mem:20 },
+    ],
+  };
+  const SHAPES = ['off','boost that fades','builds to a day','shock','rhythm'];
+  const shocks = { move:[], cold:[], sandbox:[] };   // {t0, A}
+  const off = { move:new Set(), cold:new Set(), sandbox:new Set() };
+
+  // ---------- scene computation ----------
+  function factorsMove() {
+    const p = P.move;
+    return [
+      { name:'anxiety',  col:COL.rose,   y: anticipate(p.day, -p.anx, 21, 5) },
+      { name:'move chaos', col:COL.violet, y: pulse(p.day, -3, 10) },
+      { name:'home joy', col:COL.teal,   y: stepAdapt(p.day, p.joy, p.adapt, 45) },
+      { name:'commute',  col:COL.blue,   y: stepAdapt(p.day, p.comm, 0.15, 45) },
+      { name:'friends',  col:COL.sand,   y: rampSat(p.day, -p.fri, 60) },
+    ];
+  }
+  function coldRuns() {
+    const p = P.cold;
+    const wAbsorb = arr().fill(p.warm);
+    const wCold = arr().fill(p.warm);
+    for (let t = 40; t < Math.min(DAYS, 40 + p.cold); t++) wCold[t] = 0;
+    const sting = pulse(40, -p.sting, p.tau);
+    const noiseExtra = arr();
+    for (const s of shocks.cold) { const py = pulse(s.t0, s.A, 4); for (let t=0;t<DAYS;t++) noiseExtra[t]+=py[t]; }
+    const mk = w => { const sig = smooth(w, 20), y = arr();
+      for (let t = 0; t < DAYS; t++) y[t] = sig[t] + sting[t] + noiseExtra[t];
+      return { sig, y }; };
+    return { absorb: mk(wAbsorb), cold: mk(wCold), sting };
+  }
+  function factorsSandbox() {
+    return P.sandbox.map((s, i) => {
+      const col = [COL.teal, COL.blue, COL.violet][i];
+      let y;
+      if (s.shape === 0) y = arr();
+      else if (s.shape === 1) y = pulse(s.day, s.size, s.mem*3);
+      else if (s.shape === 2) y = anticipate(s.day, s.size, s.mem*2, 6);
+      else if (s.shape === 3) y = pulse(s.day, -s.size, s.mem);
+      else y = rhythm(s.size, Math.max(7, s.mem));
+      return { name:'slot '+(i+1)+' · '+SHAPES[s.shape], col, y };
+    });
+  }
+  function currentFactors() {
+    if (scene === 'move') return factorsMove();
+    if (scene === 'sandbox') return factorsSandbox();
+    return null; // cold handled specially
+  }
+  function shockCurve(key) {
+    const y = arr();
+    for (const s of shocks[key]) { const py = pulse(s.t0, s.A, 4); for (let t=0;t<DAYS;t++) y[t]+=py[t]; }
+    return y;
+  }
+
+  // ---------- render ----------
+  const X = t => 10 + t/(DAYS-1)*(CW-20);
+  const YMAX = 10;
+  const Y = v => CH/2 - v/YMAX*(CH/2 - 14);
+  function line(y, col, width, dash) {
+    cc.strokeStyle = col; cc.lineWidth = width; cc.setLineDash(dash||[]);
+    cc.beginPath();
+    for (let t = 0; t < DAYS; t++) { const px = X(t), py = Y(Math.max(-YMAX, Math.min(YMAX, y[t]))); t?cc.lineTo(px,py):cc.moveTo(px,py); }
+    cc.stroke(); cc.setLineDash([]);
+  }
+  function frame() {
+    cc.fillStyle = '#090a10'; cc.fillRect(0,0,CW,CH);
+    cc.strokeStyle = 'rgba(233,228,216,.12)'; cc.lineWidth = 1;
+    cc.beginPath(); cc.moveTo(10, Y(0)); cc.lineTo(CW-10, Y(0)); cc.stroke();
+    cc.fillStyle = COL.mute; cc.font = '8.5px ui-monospace,Menlo,monospace';
+    for (let m = 0; m <= 12; m += 3) {
+      const t = Math.min(DAYS-1, m*30.4);
+      cc.fillText(m+'mo', X(t)-6, CH-4);
+      cc.strokeStyle = 'rgba(233,228,216,.05)';
+      cc.beginPath(); cc.moveTo(X(t), 8); cc.lineTo(X(t), CH-14); cc.stroke();
+    }
+  }
+  function render() {
+    frame();
+    const shockY = shockCurve(scene);
+    if (scene === 'cold') {
+      const r = coldRuns();
+      if (!sumOnly) { line(r.sting, COL.violet, 1.1); line(r.cold.sig, 'rgba(233,228,216,.35)', 1.1, [3,3]); }
+      line(r.absorb.y, COL.teal, 2.2);
+      line(r.cold.y, COL.rose, 2.2);
+      const cost = integral(r.absorb.y) - integral(r.cold.y);
+      const insult = -integral(r.sting);
+      const ratio = insult > 0.5 ? (cost/insult) : 0;
+      cap.innerHTML = `going cold ${P.cold.cold}d costs <i>${cost.toFixed(0)} mood-days</i> · the insult itself: ${insult.toFixed(0)} · <b>your reaction ×${ratio.toFixed(1)} the wound</b>`;
+      renderChips([{name:'absorb & stay warm',col:COL.teal},{name:'go cold '+P.cold.cold+'d',col:COL.rose},{name:'the insult',col:COL.violet}], true);
+    } else {
+      const fs = currentFactors();
+      const sum = arr();
+      fs.forEach((f, i) => { if (!off[scene].has(i)) for (let t=0;t<DAYS;t++) sum[t]+=f.y[t]; });
+      for (let t=0;t<DAYS;t++) sum[t]+=shockY[t];
+      if (!sumOnly) fs.forEach((f, i) => { if (!off[scene].has(i)) line(f.y, f.col, 1.1); });
+      if (shocks[scene].length && !sumOnly) line(shockY, 'rgba(233,228,216,.4)', 1.1, [2,3]);
+      line(sum, COL.lamp, 2.4);
+      const tot = integral(sum);
+      let best = '', bestV = 0;
+      fs.forEach((f,i)=>{ if(off[scene].has(i)) return; const v = Math.abs(integral(f.y)); if (v > bestV){ bestV=v; best=f.name; } });
+      cap.innerHTML = `12-mo total: <b>${tot>=0?'+':''}${tot.toFixed(0)} mood-days</b>${best?` · biggest force: ${best}`:''}${shocks[scene].length?` · shocks: ${shocks[scene].length}`:''}`;
+      renderChips(fs.map(f=>({name:f.name,col:f.col})), false);
+    }
+  }
+  function renderChips(items, readonly) {
+    const box = $('chips'); box.innerHTML = '';
+    items.forEach((it, i) => {
+      const c = document.createElement('button');
+      c.className = 'chip' + (!readonly && off[scene].has(i) ? ' off' : '');
+      c.style.color = it.col; c.style.borderColor = it.col+'55';
+      c.textContent = it.name;
+      if (!readonly) c.addEventListener('click', () => {
+        off[scene].has(i) ? off[scene].delete(i) : off[scene].add(i);
+        render();
+        toast(off[scene].has(i) ? `${it.name} removed — watch the sum` : `${it.name} back in`);
+      });
+      box.appendChild(c);
+    });
+  }
+
+  // ---------- wiring ----------
+  document.querySelectorAll('#scenes button').forEach(b => b.addEventListener('click', () => {
+    scene = b.dataset.s;
+    document.querySelectorAll('#scenes button').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('.sliders').forEach(x => x.classList.toggle('on', x.id === 's-'+scene && $('dialBtn').classList.contains('on')));
+    render();
+  }));
+  function bind(id, out, get, set, fmt) {
+    $(id).addEventListener('input', e => { set(+e.target.value); $(out).textContent = fmt(+e.target.value); render(); });
+  }
+  bind('m-day','om-day', ()=>0, v=>P.move.day=v, v=>v);
+  bind('m-anx','om-anx', ()=>0, v=>P.move.anx=v, v=>v);
+  bind('m-joy','om-joy', ()=>0, v=>P.move.joy=v, v=>v);
+  bind('m-adapt','om-adapt', ()=>0, v=>P.move.adapt=v/100, v=>v+'%');
+  bind('m-comm','om-comm', ()=>0, v=>P.move.comm=v, v=>(v>0?'+':'')+v);
+  bind('m-fri','om-fri', ()=>0, v=>P.move.fri=v, v=>v);
+  bind('c-warm','oc-warm', ()=>0, v=>P.cold.warm=v, v=>v);
+  bind('c-sting','oc-sting', ()=>0, v=>P.cold.sting=v, v=>v);
+  bind('c-tau','oc-tau', ()=>0, v=>P.cold.tau=v, v=>v);
+  bind('c-cold','oc-cold', ()=>0, v=>P.cold.cold=v, v=>v);
+
+  // sandbox sliders (built once)
+  function buildSandbox() {
+    const box = $('s-sandbox'); box.innerHTML = '';
+    P.sandbox.forEach((s, i) => {
+      const sh = document.createElement('div'); sh.className = 'shape';
+      sh.innerHTML = `slot ${i+1}<button id="sb-shape-${i}">${SHAPES[s.shape]}</button>`;
+      box.appendChild(sh);
+      const rows = [
+        ['size', 0, 8, s.size, v=>P.sandbox[i].size=v],
+        ['day', 0, 360, s.day, v=>P.sandbox[i].day=v],
+        ['memory', 2, 60, s.mem, v=>P.sandbox[i].mem=v],
+      ];
+      for (const [nm, mn, mx, val, set] of rows) {
+        const l = document.createElement('label'); l.className = 'slider';
+        l.innerHTML = `${nm}<input type="range" min="${mn}" max="${mx}" value="${val}"><output>${val}</output>`;
+        const inp = l.querySelector('input'), o = l.querySelector('output');
+        inp.addEventListener('input', e => { set(+e.target.value); o.textContent = e.target.value; render(); });
+        box.appendChild(l);
+      }
+      sh.querySelector('button').addEventListener('click', e => {
+        P.sandbox[i].shape = (P.sandbox[i].shape+1)%SHAPES.length;
+        e.currentTarget.textContent = SHAPES[P.sandbox[i].shape];
+        render();
+      });
+    });
+  }
+  buildSandbox();
+
+  $('sumOnly').addEventListener('click', e => { sumOnly = !sumOnly; e.currentTarget.classList.toggle('on', sumOnly); render(); });
+  $('dialBtn').addEventListener('click', e => {
+    const on = e.currentTarget.classList.toggle('on');
+    document.querySelectorAll('.sliders').forEach(x => x.classList.toggle('on', on && x.id === 's-'+scene));
+  });
+  $('reset').addEventListener('click', () => { shocks[scene].length = 0; off[scene].clear(); render(); toast('scene reset'); });
+
+  // tap the chart = life happens (a shock at that day, sized & signed by where you tap)
+  chart.addEventListener('pointerdown', e => {
+    const r = chart.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    const t0 = Math.round(Math.max(0, Math.min(DAYS-1, (x-10)/(CW-20)*(DAYS-1))));
+    const A = Math.max(-6, Math.min(6, (CH/2 - y)/(CH/2-14)*YMAX));
+    if (Math.abs(A) < 0.7) return;
+    shocks[scene].push({ t0, A });
+    toast(`${A>0?'good':'bad'} surprise · day ${t0} · fades in days`);
+    render();
+  });
+
+  const MANUAL = `
+    <h2>what this is</h2>
+    <p>A sketchpad for <b>time-dependent life dynamics</b>. Each factor is a simple curve — a boost that fades, dread that builds toward a date, a shock that decays, a slow drift. The thick gold line is their <b>sum</b>: your modeled mood over 12 months. Your head cannot integrate five of these at once. This page can.</p>
+    <h2>what it is not</h2>
+    <p><b>It is not a prediction.</b> It integrates <i>your assumptions</i> and hands them back — garbage in, confident-looking garbage out. Its three honest uses: ① it forces assumptions to become explicit and visible, ② it shows dynamics your intuition can't run (crossovers, adaptation washing out a peak, a two-week policy outliving a two-day feeling), ③ tap the chips to remove a factor and see <b>which assumption is doing the work</b>. Decide from that — never from the line's exact height. And it models decisions, not a score to chase: the point is understanding your own machinery, not optimizing a number.</p>
+    <h2>signal vs noise</h2>
+    <p>A <b>signal</b> is slow and load-bearing: it persists, you must maintain it, and it moves only with sustained input (warmth in a relationship, health, craft). <b>Noise</b> is fast and mean-reverting: it arrives loud and decays in days (an insult, a bad commute, a great party). The operational law this sketchpad keeps teaching: <b>never answer fast noise with slow-variable changes.</b> The Cold Shoulder scene prices that mistake.</p>
+    <h2>the science this leans on</h2>
+    <p class="src">Hedonic adaptation: big life changes fade toward baseline (Brickman &amp; Campbell 1971; Diener). Impact bias: we overestimate how long future feelings will last (Gilbert &amp; Wilson) — the adaptation slider is the antidote. Commuting is unusually adaptation-resistant (Stutzer &amp; Frey, the "commuting paradox") — which is why the commute factor keeps 85% of its effect while home-joy fades. Judging by the 12-month integral rather than day-one feeling is Kahneman's experienced-utility move. The whole approach — simple stocks, flows and delays because minds can't integrate them — is system dynamics (Forrester 1961; Meadows, <i>Thinking in Systems</i>).</p>
+    <h2>controls</h2>
+    <p>Dials shape each factor. Chips toggle factors in and out of the sum. <b>Tap the chart</b> to drop a life surprise at that day — height sets how good or bad. Sum only hides the components. Reset clears shocks and toggles for the scene.</p>`;
+  $('infoBtn').addEventListener('click', () => { $('infoBody').innerHTML = MANUAL; $('info').classList.add('on'); });
+  $('infoClose').addEventListener('click', () => $('info').classList.remove('on'));
+
+  // go
+  document.querySelectorAll('.sliders').forEach(x => x.classList.toggle('on', x.id === 's-move'));
+  resize();
+  toast('tap chart = life happens · chips remove a factor · ⓘ for what this is (and is not)', 3400);
+  window.LAB = { P, factorsMove, coldRuns, factorsSandbox, integral, shocks, render };
+})();
+</script>
+</body>
+</html>
