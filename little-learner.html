@@ -257,8 +257,103 @@
     { key:'serve', name:'7 · Serve', ds:'rings',
       goal:'Training is over; the weights are <b>frozen</b>. Tap anywhere: your point flows through the network — each neuron fires, the output states a <b>confidence</b>. This is <b>inference</b> (serving): no learning, just flow. Training changes weights and is expensive, done once. Serving runs them and is cheap, done billions of times. Every reply Claude writes you is this arrow.',
       sliders:[], train:false, probe:true, auto:true },
+    { key:'context', name:'8 · Context', ds:'rings', mode:'attn', sliders:[], train:false,
+      goal:'Before the mechanism, play it yourself. Three people put on hats; one is asked: <b>what color is yours?</b> Tap the answer below the lineup. Notice what your eyes just did — took the question (a <b>query</b>), scanned the lineup for the matching person (the <b>keys</b>), read off their hat (the <b>value</b>). No fixed wiring can do this: the answer sits at a different position every deal. You need connections that move. That is attention.' },
+    { key:'attention', name:'9 · Attention', ds:'rings', mode:'attn', sliders:['lr'], train:true, lrDefault:0.15,
+      goal:'A real one-head attention layer, training live on the hat game. <b>query·key</b> scores every token, <b>softmax</b> turns scores into weights, the weights mix the <b>values</b>. Press Train: at first it stares everywhere at once — then it <b>learns where to look</b>. The learned matrices (W<sub>q</sub>, W<sub>k</sub>, W<sub>v</sub>) freeze after training, but the weights on screen are recomputed for every deal: tap empty space for a new deal and watch the connections move. Tap a token to see its score. That is the 2017 page-turn.' },
   ];
   const DS_NAMES = { rings:'rings', moons:'moons', spiral:'spiral' };
+
+  // ================= a real one-head attention layer =================
+  const AT = { D:16, DK:8, tokE:null, posE:null, Wq:null, Wk:null, Wv:null, Wo:null, bo:null,
+    step:0, lossHist:[], accHist:[], deal:null, last:null, sel:-1, rng:null, seed:0, streak:0, reveal:-1 };
+  const SLOT_NAMES = ['A','B','C','D'];
+  const COLOR_HEX = [COL.teal, COL.rose, COL.blue, COL.violet];
+  function atInit(seed) {
+    AT.seed = seed === undefined ? (Math.random()*1e9)|0 : seed;
+    const r = mulberry32(AT.seed); AT.rng = r;
+    const mat = (n, m, sc) => { const a = []; for (let i = 0; i < n; i++) { const row = new Float64Array(m); for (let j = 0; j < m; j++) row[j] = (r()*2-1)*sc; a.push(row); } return a; };
+    AT.tokE = mat(20, AT.D, 0.5); AT.posE = mat(4, AT.D, 0.5);
+    AT.Wq = mat(AT.D, AT.DK, 0.4); AT.Wk = mat(AT.D, AT.DK, 0.4);
+    AT.Wv = mat(AT.D, AT.D, 0.35); AT.Wo = mat(AT.D, 4, 0.4); AT.bo = new Float64Array(4);
+    AT.step = 0; AT.lossHist = []; AT.accHist = []; AT.sel = -1; AT.reveal = -1; AT.streak = 0;
+    AT.deal = atDeal(); AT.last = atForward(AT.deal, true);
+  }
+  function atDeal() {
+    const r = AT.rng, slots = [0,1,2,3];
+    for (let i = 3; i > 0; i--) { const j = (r()*(i+1))|0; [slots[i], slots[j]] = [slots[j], slots[i]]; }
+    const use = slots.slice(0, 3), cols = use.map(() => (r()*4)|0);
+    const qi = (r()*3)|0;
+    return { toks:[...use.map((sl,k)=>sl*4+cols[k]), 16+use[qi]], slots:use, cols, qi, target:cols[qi] };
+  }
+  const vdot = (a,b) => { let t=0; for (let i=0;i<a.length;i++) t+=a[i]*b[i]; return t; };
+  const vmat = (v, M) => { const out = new Float64Array(M[0].length); for (let i=0;i<v.length;i++){ const vi=v[i], Mi=M[i]; for (let j=0;j<out.length;j++) out[j]+=vi*Mi[j]; } return out; };
+  const smax = z => { const m = Math.max(...z), e = z.map(v=>Math.exp(v-m)); const S = e.reduce((a,b)=>a+b,0); return e.map(v=>v/S); };
+  function atForward(deal, keep) {
+    const E = [];
+    for (let p = 0; p < 4; p++) { const e = new Float64Array(AT.D), te = AT.tokE[deal.toks[p]], pe = AT.posE[p];
+      for (let i = 0; i < AT.D; i++) e[i] = te[i]+pe[i]; E.push(e); }
+    const q = vmat(E[3], AT.Wq), Ks = [], Vs = [], sc = new Float64Array(4);
+    for (let p = 0; p < 4; p++) { Ks.push(vmat(E[p], AT.Wk)); Vs.push(vmat(E[p], AT.Wv)); sc[p] = vdot(q, Ks[p])/Math.sqrt(AT.DK); }
+    const w = smax(Array.from(sc));
+    const ctx = new Float64Array(AT.D);
+    for (let p = 0; p < 4; p++) for (let i = 0; i < AT.D; i++) ctx[i] += w[p]*Vs[p][i];
+    const h = new Float64Array(AT.D);
+    for (let i = 0; i < AT.D; i++) h[i] = E[3][i] + ctx[i];
+    const logits = new Float64Array(4);
+    for (let c = 0; c < 4; c++) { let t = AT.bo[c]; for (let i = 0; i < AT.D; i++) t += h[i]*AT.Wo[i][c]; logits[c] = t; }
+    const probs = smax(Array.from(logits));
+    return keep ? { E, q, Ks, Vs, sc, w, ctx, h, probs } : probs;
+  }
+  function atZeroGrads() {
+    const z = M => M.map(r => new Float64Array(r.length));
+    return { tokE:z(AT.tokE), posE:z(AT.posE), Wq:z(AT.Wq), Wk:z(AT.Wk), Wv:z(AT.Wv), Wo:z(AT.Wo), bo:new Float64Array(4) };
+  }
+  function atBackward(deal, G) {
+    const f = atForward(deal, true), D = AT.D, DK = AT.DK;
+    const dlog = f.probs.map((p,c) => p - (c === deal.target ? 1 : 0));
+    const dh = new Float64Array(D);
+    for (let c = 0; c < 4; c++) { G.bo[c] += dlog[c];
+      for (let i = 0; i < D; i++) { G.Wo[i][c] += f.h[i]*dlog[c]; dh[i] += AT.Wo[i][c]*dlog[c]; } }
+    const dE = [0,1,2,3].map(() => new Float64Array(D));
+    for (let i = 0; i < D; i++) dE[3][i] += dh[i];
+    const dctx = dh;
+    const dw = new Float64Array(4);
+    for (let p = 0; p < 4; p++) {
+      dw[p] = vdot(dctx, f.Vs[p]);
+      const dV = new Float64Array(D);
+      for (let i = 0; i < D; i++) dV[i] = f.w[p]*dctx[i];
+      for (let i = 0; i < D; i++) { const Ei = f.E[p][i]; for (let j = 0; j < D; j++) G.Wv[i][j] += Ei*dV[j]; }
+      for (let i = 0; i < D; i++) { let t = 0; for (let j = 0; j < D; j++) t += AT.Wv[i][j]*dV[j]; dE[p][i] += t; }
+    }
+    let mix = 0; for (let p = 0; p < 4; p++) mix += f.w[p]*dw[p];
+    const ds = [0,1,2,3].map(p => f.w[p]*(dw[p]-mix));
+    const dq = new Float64Array(DK);
+    for (let p = 0; p < 4; p++) {
+      const dK = new Float64Array(DK), c = ds[p]/Math.sqrt(DK);
+      for (let j = 0; j < DK; j++) { dq[j] += c*f.Ks[p][j]; dK[j] = c*f.q[j]; }
+      for (let i = 0; i < D; i++) { const Ei = f.E[p][i]; for (let j = 0; j < DK; j++) G.Wk[i][j] += Ei*dK[j]; }
+      for (let i = 0; i < D; i++) { let t = 0; for (let j = 0; j < DK; j++) t += AT.Wk[i][j]*dK[j]; dE[p][i] += t; }
+    }
+    for (let i = 0; i < D; i++) { const Ei = f.E[3][i]; for (let j = 0; j < DK; j++) G.Wq[i][j] += Ei*dq[j]; }
+    for (let i = 0; i < D; i++) { let t = 0; for (let j = 0; j < DK; j++) t += AT.Wq[i][j]*dq[j]; dE[3][i] += t; }
+    for (let p = 0; p < 4; p++) for (let i = 0; i < D; i++) { G.tokE[deal.toks[p]][i] += dE[p][i]; G.posE[p][i] += dE[p][i]; }
+    const pc = Math.max(1e-9, f.probs[deal.target]);
+    return { loss:-Math.log(pc), correct:(f.probs.indexOf(Math.max(...f.probs)) === deal.target) ? 1 : 0 };
+  }
+  function atTrainStep(lrr, batch) {
+    const G = atZeroGrads();
+    let L = 0, ok = 0;
+    for (let b = 0; b < batch; b++) { const r = atBackward(atDeal(), G); L += r.loss; ok += r.correct; }
+    const upd = (M, gM) => { for (let i = 0; i < M.length; i++) for (let j = 0; j < M[i].length; j++) M[i][j] -= lrr*gM[i][j]/batch; };
+    upd(AT.tokE, G.tokE); upd(AT.posE, G.posE); upd(AT.Wq, G.Wq); upd(AT.Wk, G.Wk); upd(AT.Wv, G.Wv); upd(AT.Wo, G.Wo);
+    for (let c = 0; c < 4; c++) AT.bo[c] -= lrr*G.bo[c]/batch;
+    AT.step++;
+    AT.lossHist.push(L/batch); AT.accHist.push(ok/batch);
+    if (AT.lossHist.length > 400) { AT.lossHist.shift(); AT.accHist.shift(); }
+    AT.last = atForward(AT.deal, true);
+    return L/batch;
+  }
 
   // ================= state =================
   let ch = CH[0], model = null, data = null, dsKind = 'crowds';
@@ -267,6 +362,13 @@
   let heatDirty = true, tilesDirty = true;
 
   function chapterDefaults() {
+    if (ch.mode === 'attn') {
+      if (!AT.tokE) atInit();
+      if (ch.lrDefault !== undefined) lr = ch.lrDefault;
+      training = false; syncTrainBtn();
+      if (ch.key === 'context') { AT.streak = 0; AT.reveal = -1; AT.deal = atDeal(); AT.last = atForward(AT.deal, true); }
+      return;
+    }
     dsKind = ch.ds === 'noisy' ? 'rings' : ch.ds;
     const H = (ch.key==='neuron'||ch.key==='learn'||ch.key==='limit') ? 0
             : ch.key==='blackbox' || ch.key==='serve' ? 4
@@ -448,9 +550,89 @@
     node(xOut, NH/2, 'out', f ? `rgba(240,184,90,${0.2+f.p*0.6})` : 'rgba(240,184,90,.25)', f?f.p.toFixed(2):undefined);
   }
 
+  function tokenXY(p){ const gap = Math.min(84, (WW-40)/3); const x0 = WW/2 - gap*1.5; return [x0 + p*gap, WH*0.30]; }
+  function drawAttnWorld() {
+    wc.fillStyle = COL.bg; wc.fillRect(0,0,WW,WH);
+    const d = AT.deal, f = AT.last;
+    if (ch.key === 'attention') {
+      const [qx, qy] = tokenXY(3);
+      for (let p = 0; p < 3; p++) {
+        const [x, y] = tokenXY(p), w = f.w[p];
+        wc.strokeStyle = `rgba(240,184,90,${0.15 + w*0.85})`; wc.lineWidth = 0.5 + w*7;
+        wc.beginPath(); wc.moveTo(qx, qy-22); wc.quadraticCurveTo((qx+x)/2, qy - 70 - w*30, x, y-22); wc.stroke();
+      }
+    }
+    for (let p = 0; p < 4; p++) {
+      const [x, y] = tokenXY(p);
+      const isQ = p === 3;
+      wc.beginPath(); wc.arc(x, y, 19, 0, TAU);
+      wc.fillStyle = isQ ? 'rgba(12,13,19,.9)' : COLOR_HEX[d.cols[p]];
+      wc.fill();
+      wc.strokeStyle = isQ ? COL.lamp : 'rgba(233,228,216,.35)'; wc.lineWidth = isQ ? 2 : 1; wc.stroke();
+      wc.fillStyle = isQ ? COL.lamp : '#0b0c12'; wc.font = 'bold 13px ui-monospace,Menlo,monospace';
+      const label = isQ ? SLOT_NAMES[d.slots[d.qi]]+'?' : SLOT_NAMES[d.slots[p]];
+      wc.fillText(label, x - (isQ?10:5), y+5);
+      if (ch.key === 'attention' && p < 3) {
+        const w = f.w[p];
+        wc.fillStyle = 'rgba(240,184,90,.85)'; wc.fillRect(x-11, y+34+(1-w)*34, 22, w*34);
+        wc.strokeStyle = 'rgba(233,228,216,.2)'; wc.strokeRect(x-11, y+34, 22, 34);
+        wc.fillStyle = COL.mute; wc.font='8.5px ui-monospace,Menlo,monospace';
+        wc.fillText(w.toFixed(2), x-11, y+80);
+      }
+      if (AT.sel === p) { wc.strokeStyle = COL.lamp; wc.lineWidth = 1.4; wc.beginPath(); wc.arc(x, y, 25, 0, TAU); wc.stroke(); }
+    }
+    wc.fillStyle = COL.mute; wc.font='9px ui-monospace,Menlo,monospace';
+    wc.fillText('the lineup', 10, 16);
+    const ay = WH - 52, aw = Math.min(70, (WW-40)/4), ax0 = WW/2 - aw*2 + 4;
+    for (let c = 0; c < 4; c++) {
+      const x = ax0 + c*aw;
+      wc.fillStyle = COLOR_HEX[c];
+      wc.globalAlpha = ch.key === 'attention' ? 0.25 + f.probs[c]*0.75 : 0.9;
+      wc.fillRect(x, ay, aw-8, 34); wc.globalAlpha = 1;
+      if (ch.key === 'attention') {
+        wc.fillStyle = '#0b0c12'; wc.font='bold 10px ui-monospace,Menlo,monospace';
+        wc.fillText((f.probs[c]*100|0)+'%', x+6, ay+21);
+      }
+      if (AT.reveal >= 0 && c === d.target) { wc.strokeStyle = COL.ink; wc.lineWidth = 2.5; wc.strokeRect(x-2, ay-2, aw-4, 38); }
+    }
+    wc.fillStyle = COL.mute; wc.font='9px ui-monospace,Menlo,monospace';
+    if (ch.key === 'context') wc.fillText(`what color is ${SLOT_NAMES[d.slots[d.qi]]}'s hat? · streak ${AT.streak}`, 10, ay-10);
+    else {
+      const pred = f.probs.indexOf(Math.max(...f.probs));
+      wc.fillText(`model: ${(Math.max(...f.probs)*100)|0}% sure ${AT.step>0 ? (pred===d.target?'✓':'✗ (truth outlined)') : ''}`, 10, ay-10);
+      if (AT.step > 0 && pred !== d.target) { wc.strokeStyle='rgba(233,228,216,.6)'; wc.lineWidth=2; wc.strokeRect(ax0 + d.target*aw - 2, ay-2, aw-4, 38); }
+    }
+    wc.fillStyle = 'rgba(233,228,216,.78)'; wc.font = '9px ui-monospace,Menlo,monospace';
+    wc.fillText(ch.key==='attention' ? `step ${AT.step} · 1108 params · frozen matrices, per-deal weights` : 'you are the attention head', 8, WH-8);
+  }
+  function drawAttnNet() {
+    nc.fillStyle = '#090a10'; nc.fillRect(0,0,NW,NH);
+    nc.font = '9.5px ui-monospace,Menlo,monospace';
+    const d = AT.deal, f = AT.last;
+    if (ch.key === 'context') {
+      nc.fillStyle = COL.mute;
+      nc.fillText('query = the question you hold', 10, 24);
+      nc.fillText('keys  = what each token advertises (its letter)', 10, 44);
+      nc.fillText('value = what it hands over if chosen (its hat)', 10, 64);
+      nc.fillStyle = COL.lamp;
+      nc.fillText('get a streak of 3, then chapter 9: a machine learns this', 10, 92);
+      return;
+    }
+    nc.fillStyle = COL.mute; nc.fillText('match score → softmax → weight', 10, 16);
+    for (let p = 0; p < 3; p++) {
+      const y = 30 + p*26;
+      nc.fillStyle = AT.sel === p ? COL.lamp : COL.ink;
+      nc.fillText(`${SLOT_NAMES[d.slots[p]]}:  q·k ${f.sc[p] >= 0 ? ' ' : ''}${f.sc[p].toFixed(2)}`, 10, y+9);
+      nc.fillStyle = 'rgba(240,184,90,.8)';
+      nc.fillRect(122, y, Math.max(1, f.w[p]*(NW-196)), 12);
+      nc.fillStyle = COL.mute; nc.fillText('→ '+f.w[p].toFixed(2), NW-62, y+10);
+    }
+    nc.fillStyle = COL.mute;
+    nc.fillText('answer = Σ weight × value → color head', 10, NH-6);
+  }
   function drawStat() {
     sc2.fillStyle = '#090a10'; sc2.fillRect(0,0,SW,SH);
-    const L = model.lossHist; if (L.length < 2) { sc2.fillStyle=COL.mute; sc2.font='8.5px ui-monospace,Menlo,monospace'; sc2.fillText('loss will draw here as it trains', 8, 14); return; }
+    const L = ch.mode === 'attn' ? AT.lossHist : model.lossHist; if (L.length < 2) { sc2.fillStyle=COL.mute; sc2.font='8.5px ui-monospace,Menlo,monospace'; sc2.fillText('loss will draw here as it trains', 8, 14); return; }
     const mx = Math.max(0.75, ...L, ...(model.testHist.length?model.testHist:[0]));
     const line = (arr, col) => { sc2.strokeStyle = col; sc2.lineWidth = 1.4; sc2.beginPath();
       for (let i = 0; i < arr.length; i++) {
@@ -458,13 +640,22 @@
         i?sc2.lineTo(x,y):sc2.moveTo(x,y);
       } sc2.stroke(); };
     line(L, COL.lamp);
-    if (model.testHist.length > 1) line(model.testHist, COL.rose);
+    if (ch.mode !== 'attn' && model.testHist.length > 1) line(model.testHist, COL.rose);
     sc2.fillStyle = COL.lamp; sc2.font='8.5px ui-monospace,Menlo,monospace'; sc2.fillText('— training loss', SW-160, 12);
     if (ch.split) { sc2.fillStyle = COL.rose; sc2.fillText('— test loss', SW-72, 12); }
   }
 
   // ================= loop =================
   function loop() {
+    if (ch.mode === 'attn') {
+      if (training && ch.train) { const k = Math.max(1, (perFrame/5)|0); for (let t = 0; t < k; t++) atTrainStep(lr, 16); }
+      drawAttnWorld(); drawAttnNet(); drawStat();
+      const acc = AT.accHist.length ? AT.accHist[AT.accHist.length-1] : 0.25;
+      cap.innerHTML = ch.key === 'context'
+        ? `<b>the hat game</b> · tap a color to answer · streak ${AT.streak}`
+        : `<b>one head</b> · step ${AT.step} · batch acc ${(acc*100)|0}% · tap token = score · tap space = new deal`;
+      requestAnimationFrame(loop); return;
+    }
     if (training && ch.train) {
       for (let k = 0; k < perFrame; k++) {
         const L = trainEpoch(model, data, lr);
@@ -489,9 +680,14 @@
   // ================= controls =================
   function syncTrainBtn(){ $('train').textContent = training ? 'Pause' : 'Train'; $('train').classList.toggle('on', training); $('train').disabled = !ch.train; $('step1').disabled = !ch.train; }
   $('train').addEventListener('click', () => { training = !training; syncTrainBtn(); });
-  $('step1').addEventListener('click', () => { const L = trainEpoch(model, data, lr); model.lossHist.push(L); if(ch.split) model.testHist.push(evalSet(model,data,true).loss); heatDirty=tilesDirty=true; toast(`one epoch · loss ${L.toFixed(3)}`, 1100); });
+  $('step1').addEventListener('click', () => {
+    if (ch.mode === 'attn') { const L = atTrainStep(lr, 16); toast(`one step (16 deals) · loss ${L.toFixed(3)}`, 1100); return; }
+    const L = trainEpoch(model, data, lr); model.lossHist.push(L); if(ch.split) model.testHist.push(evalSet(model,data,true).loss); heatDirty=tilesDirty=true; toast(`one epoch · loss ${L.toFixed(3)}`, 1100); });
   $('speed').addEventListener('click', e => { perFrame = perFrame===1?10:perFrame===10?50:1; e.currentTarget.textContent = perFrame+'×'; });
-  $('reset').addEventListener('click', () => { rebuild(model.H); buildSliders(); toast('new random start · seed rolled'); });
+  $('reset').addEventListener('click', () => {
+    if (ch.mode === 'attn') { atInit(); toast('attention re-rolled · untrained again'); return; }
+    rebuild(model.H); buildSliders(); toast('new random start · seed rolled');
+  });
 
   const SLIDER_DEFS = {
     w0:   { label:'weight on x', min:-30, max:30, get:()=>model.w[0]*10, set:v=>{model.w[0]=v/10; heatDirty=true;}, fmt:v=>(v/10).toFixed(1) },
@@ -537,10 +733,27 @@
     chRow.appendChild(b);
   });
 
-  // tap the world: probe (serve chapter) — elsewhere, probe too (it teaches everywhere)
+  // tap the world: probe — or, in attention chapters, answer / inspect / new deal
   world.addEventListener('pointerdown', e => {
     const r = world.getBoundingClientRect();
-    probe = { x: ix(e.clientX - r.left), y: iy(e.clientY - r.top) };
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    if (ch.mode === 'attn') {
+      const ay = WH - 52, aw = Math.min(70, (WW-40)/4), ax0 = WW/2 - aw*2 + 4;
+      if (py >= ay - 6 && py <= ay + 40) {
+        const c = Math.floor((px - ax0) / aw);
+        if (c >= 0 && c < 4 && ch.key === 'context') {
+          AT.reveal = c;
+          if (c === AT.deal.target) { AT.streak++; toast(AT.streak >= 3 ? 'that lookup IS attention — chapter 9: a machine learns it' : 'correct — you matched a key, read its value'); }
+          else { AT.streak = 0; toast('outlined = truth · match the letter, read the hat'); }
+          setTimeout(() => { AT.deal = atDeal(); AT.last = atForward(AT.deal, true); AT.reveal = -1; }, 900);
+        }
+        return;
+      }
+      for (let p = 0; p < 4; p++) { const [x, y] = tokenXY(p); if (Math.hypot(px-x, py-y) < 26) { AT.sel = AT.sel === p ? -1 : p; return; } }
+      if (ch.key === 'attention') { AT.deal = atDeal(); AT.last = atForward(AT.deal, true); AT.sel = -1; toast('new deal · same frozen matrices · watch the weights move'); }
+      return;
+    }
+    probe = { x: ix(px), y: iy(py) };
   });
   // tap a hidden neuron on the diagram: ablate (black box chapter)
   net.addEventListener('pointerdown', e => {
@@ -582,8 +795,10 @@
       <tr><td>black box</td><td>not secrecy — <b>distributed representation</b>. Every number is visible; the knowledge lives in no single one of them.</td></tr>
     </table>
     <h2>from 33 parameters to a trillion</h2>
-    <p>Scale this toy up and you have the backbone of a language model, honestly: same neurons, same loss-goes-downhill training, same frozen-weights serving. What changes: <b>input</b> — text chopped into <b>tokens</b>, each turned into a list of numbers, instead of (x, y); <b>output</b> — a probability for every possible next token, instead of teal/rose; <b>one architectural idea this toy lacks</b> — <b>attention</b>, which lets every word look at every other word and decide what's relevant (that idea is the "T" in GPT); and <b>scale</b> — billions of parameters, trained on trillions of tokens, for months, on thousands of chips. Why bigger keeps helping is chapter 4's lesson repeated: more neurons = more little detectors whose combinations can express more — and empirically, loss falls smoothly and predictably as parameters and data grow (the <b>scaling laws</b>).</p>
-    <p class="src">Honesty: this toy omits attention, tokens, minibatch stochastic descent (it uses the full batch each step — same idea, calmer), and the modern optimizer bells (momentum, Adam). None of those change what you learned here; they make it bigger, faster, and text-shaped.</p>`;
+    <p>Scale this toy up and you have the backbone of a language model, honestly: same neurons, same loss-goes-downhill training, same frozen-weights serving. What changes: <b>input</b> — text chopped into <b>tokens</b>, each turned into a list of numbers, instead of (x, y); <b>output</b> — a probability for every possible next token, instead of teal/rose; <b>attention</b> — which you now have, chapters 8–9: every token computes a query, scores every other token's key, and mixes their values; stacked up, that is how every word looks at every other word and decides what's relevant (the "T" in GPT); and <b>scale</b> — billions of parameters, trained on trillions of tokens, for months, on thousands of chips. Why bigger keeps helping is chapter 4's lesson repeated: more neurons = more little detectors whose combinations can express more — and empirically, loss falls smoothly and predictably as parameters and data grow (the <b>scaling laws</b>).</p>
+    <h2>attention — the 2017 page-turn</h2>
+    <p>Chapters 1–7 have <b>fixed wiring</b>: after training, a weight always connects the same two places. Attention adds wiring that <b>moves</b>. Each token asks a question (<b>query</b>), every token advertises what it is (<b>key</b>), query·key scores the match, <b>softmax</b> turns scores into weights, and the weights blend what each token carries (<b>value</b>). The learned matrices (W<sub>q</sub>, W<sub>k</sub>, W<sub>v</sub>) freeze after training — but <b>the weights they compute are rebuilt for every input</b>. Three consequences turned the page: ① a word's representation becomes context-dependent — "bank" beside "river" mixes different neighbors than "bank" beside "loan"; ② any token reaches any other in one hop, no telephone-game relay across a long sentence (RNNs' curse); ③ the whole sequence computes in parallel, which is what let training scale to the whole internet. A transformer is just this, stacked: attention decides <b>where to look</b>, then a chapter-4 style MLP decides <b>what to make of it</b> — alternated ~100 times.</p>
+    <p class="src">Honesty: chapters 8–9 are one head, one layer — the smallest real attention there is (gradient-checked, trained live, nothing simulated). Real models stack dozens of layers × dozens of heads with MLP blocks between, plus multi-head splits, layer norm, and causal masks over thousands of tokens. The famous in-context copying trick — "induction heads" — needs <i>two</i> cooperating layers, one step beyond this toy. Chapters 1–7 also use full-batch descent (8–9 use minibatches) and no Adam/momentum; those make it bigger and faster, not different.</p>`;
   $('infoBtn').addEventListener('click', () => { $('infoBody').innerHTML = MANUAL; $('info').classList.add('on'); });
   $('infoClose').addEventListener('click', () => $('info').classList.remove('on'));
 
@@ -594,6 +809,7 @@
   toast('7 chapters, left to right · everything is a real network', 3000);
   requestAnimationFrame(loop);
   window.LAB = { makeModel, forward, trainEpoch, evalSet, makeData, paramCount,
+    AT, atInit, atDeal, atForward, atBackward, atZeroGrads, atTrainStep,
     run(kind, H, epochs, lrr, seed, noiz, split) {
       const M = makeModel(H, seed===undefined?1:seed);
       const D = makeData(kind, (seed===undefined?1:seed)+7, noiz||0, !!split);
