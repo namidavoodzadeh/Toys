@@ -29,24 +29,31 @@
   .pills{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .pills::-webkit-scrollbar{display:none}
   .pills button{flex:none;background:var(--panel);border:1px solid var(--line);color:var(--mute);
-    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
     padding:8px 10px;border-radius:10px;cursor:pointer;white-space:nowrap}
   .pills button.on{color:var(--lamp);border-color:rgba(240,184,90,.6)}
   #dsRow button.on{color:var(--teal);border-color:rgba(63,209,165,.55)}
-  #goal{font-size:11.5px;line-height:1.45;color:var(--mute);padding:0 4px 8px}
+  #goal{font-size:14px;line-height:1.5;color:var(--ink);padding:0 4px 8px}
+  #goal .sub{display:block;font-size:12px;color:var(--mute);padding-top:2px}
   #goal b{color:var(--lamp);font-weight:600}
   #world{flex:1;min-height:130px;border:1px solid var(--line);border-radius:14px;width:100%;touch-action:none}
   #net{width:100%;height:118px;border:1px solid var(--line);border-radius:12px;display:block;margin-top:8px;touch-action:none}
   #stat{width:100%;height:56px;border:1px solid var(--line);border-radius:12px;display:block;margin-top:8px}
-  #cap{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;letter-spacing:.06em;color:var(--mute);
-    text-transform:uppercase;padding:6px 4px 0;min-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #cap{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.05em;color:var(--mute);
+    text-transform:uppercase;padding:6px 4px 0;min-height:17px}
   #cap b{font-weight:600;color:var(--lamp)}
   #cap i{font-style:normal;color:var(--rose)}
+  #inspect{display:none;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;line-height:1.8;
+    color:var(--ink);border:1px solid var(--line);border-radius:12px;background:var(--panel);
+    padding:9px 12px;margin-top:8px}
+  #inspect.on{display:block}
+  #inspect .qg{color:var(--lamp)} #inspect .qs{color:var(--rose)} #inspect .ql{color:var(--teal)}
+  #inspect .up{color:var(--teal)} #inspect .dn{color:var(--rose)} #inspect .dim{color:var(--mute)}
   #dock{padding-top:6px}
   #sliders{padding:6px 10px 4px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:8px}
   #sliders:empty{display:none}
-  .slider{display:grid;grid-template-columns:104px 1fr 40px;align-items:center;gap:10px;
-    font-size:10px;color:var(--mute);letter-spacing:.05em;text-transform:uppercase;margin:1px 0}
+  .slider{display:grid;grid-template-columns:122px 1fr 40px;align-items:center;gap:10px;
+    font-size:11.5px;color:var(--mute);letter-spacing:.04em;text-transform:uppercase;margin:1px 0}
   .slider output{text-align:right;color:var(--ink);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px}
   input[type=range]{width:100%;accent-color:var(--lamp);height:26px;margin:0;background:transparent}
   .row{display:flex;gap:7px;padding-top:2px}
@@ -89,6 +96,7 @@
   <div class="pills" id="stepRow" style="display:none"></div>
   <div id="goal">—</div>
   <canvas id="world"></canvas>
+  <div id="inspect"></div>
   <canvas id="net"></canvas>
   <canvas id="stat"></canvas>
   <div id="cap">—</div>
@@ -241,7 +249,7 @@
       goal:'the spam filter — walk the five steps in the row above',
       sliders:['w0','w1','wb'], train:false },
     { key:'learn', name:'2 · Learning', ds:'crowds',
-      goal:'Now let it learn — and see that the <b>gradient</b> is nothing exotic. Every email shoves every weight by <b>(error × input)</b>; the gradient is the <b>average shove</b>; one step moves each weight against it, scaled by the <b>learning rate</b>. <b>Loss</b> is the wrongness score it all tries to shrink. Press Train — the fit you fought for arrives alone. Then: Reset, rate 0.05 → it crawls. Reset, rate 2 → it snaps. Even huge steps survive here (this loss surface is a bowl); real fragility arrives with depth → chapter 4. Tap any email to watch its personal loss and its shove.',
+      goal:'Training = <b>thermostat logic</b>, one email at a time: guess too low → dial up · guess too high → dial down. Tap an email, press <b>Step</b>, watch the dials obey.<span class="sub">each email votes on each dial (error × input) · the step follows the average vote · try rate 0.05 (crawl), then 2 (snap)</span>',
       sliders:['lr'], train:true },
     { key:'limit', name:'3 · The Limit', ds:'rings',
       goal:'Same neuron, new data: rings. Train as long as you like — it cannot do it. One neuron only draws <b>straight lines</b>. Accuracy will jam near a coin flip. This failure is why depth exists → chapter 4.',
@@ -268,14 +276,14 @@
   // ===== chapter-1 guided onboarding: the spam-filter story =====
   const NB = { step:0, pick:null, solved:false, handLoss:null, handAcc:null };
   const NB_STEPS = [
-    { name:'1 data',   goal:`Every dot is one <b>email</b>, already labeled by hand. ACROSS: how many <b>“!”</b> it uses (0–20). UP: how many <b>money-words</b> (0–10). <b>Rose = spam = class 1 · teal = legit = class 0.</b> Nothing moves — this is just data sitting still. Tap any dot to read it. The mission, eventually: one rule that sorts the whole inbox. → next` },
-    { name:'2 score',  goal:`The rule is one <b>neuron</b>: <b>score = w₁·x + w₂·y + b</b>. Each input meets <b>only its own weight</b>; the inputs never multiply each other; everything is <b>added</b>. Three adjustable numbers = three <b>parameters</b>. The sliders are live — drag one and watch your tapped email's arithmetic recompute at the bottom. → next` },
-    { name:'3 squish', goal:`A score can be any number: +14, −3, whatever. The <b>sigmoid</b> σ(z)=1/(1+e⁻ᶻ) bends the whole number line into 0–1: very negative → ≈0 · zero → 0.5 · very positive → ≈1. Read the output as <b>P(spam)</b>. Your tapped email now rides the curve in the wiring panel below. → next` },
-    { name:'4 paint',  goal:`Now the shading appears: the neuron's answer asked at <b>every point of the room at once</b> — rose where P(spam)>0.5, teal below. The dots never move; <b>you repaint the room they sit in</b>. The pale seam at P=0.5 is the <b>decision boundary</b> — always a straight line here, because the score is degree-1 in x and y. → next` },
-    { name:'5 fit',    goal:`The goal, plainly: <b>every dot on matching background</b>. The two weights tilt the line; the bias slides it without turning it. ≥97% accuracy counts as solved — scored live at the top. Feel the fiddling: chapter 2 hands this exact job to <b>gradient descent</b>. (Sliders cap at ±3 only so the shading stays readable; trained weights roam free.)` },
+    { name:'1 data',   goal:`Each dot = one <b>email</b>, already labeled. ACROSS: “!” count. UP: $-words. <b>Rose = spam · teal = legit.</b><span class="sub">tap any dot to read it · then next →</span>` },
+    { name:'2 score',  goal:`The rule: <b>score = w₁·x₁ + w₂·x₂ + b</b>. Three dials. Drag one — the arithmetic updates below.<span class="sub">each input meets only its own dial · nothing multiplies together — it all adds</span>` },
+    { name:'3 squish', goal:`<b>σ</b> bends any score into 0–1. That number is the <b>guess</b>: P(spam).<span class="sub">your tapped email rides the curve in the wiring panel</span>` },
+    { name:'4 paint',  goal:`The shading = the guess at <b>every point at once</b>. Dots never move — <b>you repaint the room</b>.<span class="sub">the pale seam (guess = 0.5) is the decision boundary — always a straight line here</span>` },
+    { name:'5 fit',    goal:`Goal: <b>every dot on matching background</b>. 97% = solved.<span class="sub">weights tilt the line · bias slides it · chapter 2 then automates you</span>` },
   ];
-  const exQ = x => Math.max(0, Math.round((x+1.05)/2.1*20));   // "!" count from x
-  const moQ = y => Math.max(0, Math.round((y+1.05)/2.1*10));   // money-words from y
+  const exQ = x => Math.max(0, Math.round((x+1.05)/2.1*20));   // "!" count from x1
+  const moQ = y => Math.max(0, Math.round((y+1.05)/2.1*10));   // money-words from x2
   function nbSetStep(i){ NB.step = Math.max(0, Math.min(4, i)); heatDirty = true;
     $('goal').innerHTML = NB_STEPS[NB.step].goal; buildStepRow(); buildSliders(); }
   function buildStepRow(){
@@ -288,23 +296,45 @@
       n.style.color = 'var(--lamp)'; n.style.borderColor = 'rgba(240,184,90,.6)';
       n.addEventListener('click', () => nbSetStep(NB.step+1)); row.appendChild(n); }
   }
-  function pickInspect(){ // full arithmetic for the tapped email (chapters 1–2)
+  // one meaning per symbol, everywhere:
+  //   x1, x2 = the two inputs · w1, w2, b = the three dials · score = w1·x1 + w2·x2 + b
+  //   guess = σ(score) · truth = 1 spam / 0 legit · error = guess − truth · vote_i = error × input_i
+  function inspectData(){
     const d = NB.pick; if (!d || model.H !== 0) return null;
-    const s = model.w[0]*d.x + model.w[1]*d.y + model.wb, p = sig(s);
-    const says = p > 0.5 ? 'SPAM' : 'LEGIT', truth = d.lab ? 'SPAM' : 'LEGIT';
-    const sg = v => (v >= 0 ? '+' : '') + v.toFixed(2);
-    const lines = [
-      `this email: “!”×${exQ(d.x)} (x=${sg(d.x)}) · $×${moQ(d.y)} (y=${sg(d.y)}) · truth: ${truth}`,
-      `score = ${model.w[0].toFixed(1)}×${d.x.toFixed(2)} + ${model.w[1].toFixed(1)}×${d.y.toFixed(2)} + (${model.wb.toFixed(1)}) = ${sg(s)}`,
-      `σ(${sg(s)}) = ${p.toFixed(2)} → says ${says} (${((p>0.5?p:1-p)*100)|0}%) ${says === truth ? '✓' : '✗'}`,
-    ];
-    if (ch.key === 'learn') {
-      const pc = Math.min(1-1e-6, Math.max(1e-6, p));
-      const dl = -(d.lab*Math.log(pc) + (1-d.lab)*Math.log(1-pc));
-      lines.push(`its loss ${dl.toFixed(2)} · its shove on w₁ = (p−y)·x = ${sg((p-d.lab)*d.x)}`);
-    }
-    return { lines, s, p };
+    const x1 = d.x, x2 = d.y, truth = d.lab;
+    const score = model.w[0]*x1 + model.w[1]*x2 + model.wb;
+    const guess = sig(score);
+    const error = guess - truth;
+    const g = Math.min(1-1e-6, Math.max(1e-6, guess));
+    const loss = truth ? -Math.log(g) : -Math.log(1-g);
+    return { d, x1, x2, truth, score, guess, error, loss,
+      votes:[error*x1, error*x2, error*1] };
   }
+  let inspHTML = '';
+  function renderInspect(){
+    const el = $('inspect');
+    const I = inspectData();
+    let h;
+    if (!I) h = `<span class="dim">tap an email to open its arithmetic</span>`;
+    else {
+      const sg = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2);
+      const tW = I.truth ? `<span class="qs">SPAM</span> (1)` : `<span class="ql">LEGIT</span> (0)`;
+      const says = I.guess > 0.5 ? `<span class="qs">SPAM</span>` : `<span class="ql">LEGIT</span>`;
+      const right = (I.guess > 0.5) === (I.truth === 1);
+      h = `email: “!”×${exQ(I.x1)} → x₁ ${sg(I.x1)} · $×${moQ(I.x2)} → x₂ ${sg(I.x2)} · truth: ${tW}`
+        + `<br>score = ${model.w[0].toFixed(2)}×${I.x1.toFixed(2)} + ${model.w[1].toFixed(2)}×${I.x2.toFixed(2)} + (${model.wb.toFixed(2)}) = ${sg(I.score)}`
+        + `<br><span class="qg">guess</span> = σ(score) = <span class="qg">${I.guess.toFixed(2)}</span> → says ${says} (${((I.guess>0.5?I.guess:1-I.guess)*100)|0}%) ${right?'✓':'✗'}`;
+      if (ch.key === 'learn') {
+        const dir = I.error < 0 ? 'guess too low' : 'guess too high';
+        const arrow = v => v < 0 ? `<span class="up">▲</span>` : `<span class="dn">▼</span>`;
+        h += `<br>error = guess − truth = ${I.guess.toFixed(2)} − ${I.truth.toFixed(2)} = ${sg(I.error)} → ${dir}`
+          + `<br>its votes: w₁ ${arrow(I.votes[0])}${Math.abs(I.votes[0]).toFixed(2)} · w₂ ${arrow(I.votes[1])}${Math.abs(I.votes[1]).toFixed(2)} · b ${arrow(I.votes[2])}${Math.abs(I.votes[2]).toFixed(2)}`
+          + ` · loss = −ln(${I.truth ? I.guess.toFixed(2) : '1−'+I.guess.toFixed(2)}) = ${I.loss.toFixed(2)}`;
+      }
+    }
+    if (h !== inspHTML) { inspHTML = h; el.innerHTML = h; }
+  }
+
   function gradNow(){ let g0=0, g1=0, gb=0, n=0;
     for (const d of data) { if (d.test) continue; n++;
       const dz = forward(model, d.x, d.y) - d.lab; g0 += dz*d.x; g1 += dz*d.y; gb += dz; }
@@ -508,24 +538,15 @@
       const cls = f.p > 0.5 ? 'rose' : 'teal';
       wc.fillText(`${((f.p>0.5?f.p:1-f.p)*100)|0}% ${cls}`, wx(probe.x)+10, wy(probe.y)-8);
     }
-    // vitals
     const ev = evalSet(model, data, ch.split ? false : undefined);
-    wc.fillStyle = 'rgba(233,228,216,.78)'; wc.font = '9px ui-monospace,Menlo,monospace';
+    wc.fillStyle = 'rgba(233,228,216,.8)'; wc.font = '10px ui-monospace,Menlo,monospace';
     let v = `params ${paramCount(model)} · epoch ${model.epoch} · loss ${ev.loss.toFixed(3)} · acc ${(ev.acc*100)|0}%`;
     if (ch.split) { const te = evalSet(model, data, true); v += ` · TEST acc ${(te.acc*100)|0}%`; }
-    wc.fillText(v, 8, 14);
+    wc.fillText(v, 8, 15);
     if (story) {
-      wc.fillStyle = 'rgba(141,138,128,.9)'; wc.font = '8.5px ui-monospace,Menlo,monospace';
-      wc.fillText('ACROSS “!” 0→20 · UP $-words 0→10 · rose = spam(1) · teal = legit(0)', 8, 26);
-      const I = pickInspect();
-      wc.font = '9px ui-monospace,Menlo,monospace';
-      if (I) {
-        wc.fillStyle = 'rgba(233,228,216,.94)';
-        for (let k = 0; k < I.lines.length; k++) wc.fillText(I.lines[k], 8, WH - 9 - (I.lines.length-1-k)*11.5);
-      } else if (ch.key !== 'neuron' || NB.step >= 1) {
-        wc.fillStyle = 'rgba(141,138,128,.8)';
-        wc.fillText('tap a dot to open its arithmetic', 8, WH - 9);
-      }
+      wc.fillStyle = 'rgba(141,138,128,.95)'; wc.font = '10px ui-monospace,Menlo,monospace';
+      wc.fillText('x₁ = “!” (across) · x₂ = $-words (up)', 8, 29);
+      renderInspect();
       if (ch.key === 'neuron') {
         NB.handLoss = ev.loss; NB.handAcc = ev.acc;
         if (NB.step === 4 && !NB.solved && ev.acc >= 0.97) {
@@ -579,16 +600,16 @@
       nc.fillStyle = 'rgba(141,138,128,.9)'; nc.font = '8.5px ui-monospace,Menlo,monospace';
       if (ch.key === 'learn') {
         const g = gradNow();
-        const sg = v => (v>=0?'+':'')+v.toFixed(2);
-        nc.fillText(`wiring · gradient ∂L/∂w → x ${sg(g.g0)} · y ${sg(g.g1)} · b ${sg(g.gb)} · step = −rate·grad`, 8, 11);
+        const ar = v => v < 0 ? '▲' : '▼';
+        nc.fillText(`next Step moves: w₁ ${ar(g.g0)}${Math.abs(g.g0).toFixed(2)} · w₂ ${ar(g.g1)}${Math.abs(g.g1).toFixed(2)} · b ${ar(g.gb)}${Math.abs(g.gb).toFixed(2)} · ▲ = dial rises (avg of all votes)`, 8, 11);
       } else {
         nc.fillText('WIRING — a diagram, not a plot · teal line = + · rose = − · thick = strong', 8, 11);
       }
-      const I = pickInspect();
+      const I = inspectData();
       const xIn = 26, xOut = NW*0.46;
       const yIn3 = [NH*0.26, NH*0.52, NH*0.78];
       const w3 = [model.w[0], model.w[1], model.wb];
-      const lb3 = ['x “!”', 'y $', 'bias·1'];
+      const lb3 = ['x₁ “!”', 'x₂ $', 'bias·1'];
       for (let i = 0; i < 3; i++) {
         nc.strokeStyle = wcol(w3[i]); nc.lineWidth = wln(w3[i]);
         nc.beginPath(); nc.moveTo(xIn, yIn3[i]); nc.lineTo(xOut, NH/2); nc.stroke();
@@ -599,8 +620,8 @@
       node(xIn, yIn3[0], lb3[0], 'rgba(79,193,255,.35)', vals[0]);
       node(xIn, yIn3[1], lb3[1], 'rgba(79,193,255,.35)', vals[1]);
       node(xIn, yIn3[2], lb3[2], 'rgba(201,139,255,.30)', vals[2]);
-      const pOut = I ? I.p : forward(model, 0, 0);
-      node(xOut, NH/2, 'out σ', `rgba(240,184,90,${0.2 + pOut*0.6})`, I ? I.p.toFixed(2) : undefined);
+      const pOut = I ? I.guess : forward(model, 0, 0);
+      node(xOut, NH/2, 'guess σ', `rgba(240,184,90,${0.2 + pOut*0.6})`, I ? I.guess.toFixed(2) : undefined);
       // sigmoid inset: the squish, drawn honestly
       if (ch.key === 'learn' || NB.step >= 2) {
         const x0 = NW*0.60, x1 = NW - 10, yT = 20, yB = NH - 16;
@@ -620,8 +641,8 @@
         nc.fillText('z=−6', x0+2, yB+11); nc.fillText('0', x0+(x1-x0)/2-2, yB+11); nc.fillText('+6', x1-14, yB+11);
         nc.fillText('1', x0-7, yT+4); nc.fillText('.5', x0-11, yMid+3); nc.fillText('0', x0-7, yB+2);
         if (I) {
-          const zc = Math.max(-6, Math.min(6, I.s));
-          const mx = x0 + (zc+6)/12*(x1-x0), my = yB - I.p*(yB-yT);
+          const zc = Math.max(-6, Math.min(6, I.score));
+          const mx = x0 + (zc+6)/12*(x1-x0), my = yB - I.guess*(yB-yT);
           nc.setLineDash([2,3]); nc.strokeStyle = COL.lamp; nc.lineWidth = 1;
           nc.beginPath(); nc.moveTo(mx, yB); nc.lineTo(mx, my); nc.stroke(); nc.setLineDash([]);
           nc.fillStyle = COL.lamp; nc.beginPath(); nc.arc(mx, my, 3, 0, TAU); nc.fill();
@@ -661,8 +682,8 @@
       }
     }
     const f = probe ? forward(model, probe.x, probe.y, true) : null;
-    node(xIn, yIn[0], 'x', 'rgba(79,193,255,.35)', f?probe.x.toFixed(2):undefined);
-    node(xIn, yIn[1], 'y', 'rgba(79,193,255,.35)', f?probe.y.toFixed(2):undefined);
+    node(xIn, yIn[0], 'x₁', 'rgba(79,193,255,.35)', f?probe.x.toFixed(2):undefined);
+    node(xIn, yIn[1], 'x₂', 'rgba(79,193,255,.35)', f?probe.y.toFixed(2):undefined);
     if (H > 0 && ch.key === 'depth') {
       if (tilesDirty) renderTiles();
       for (let j = 0; j < H; j++) {
@@ -804,7 +825,7 @@
     drawWorld(); drawNet(); drawStat();
     const ev = evalSet(model, data, ch.split ? false : undefined);
     let c = `<b>${DS_NAMES[dsKind]||dsKind}</b> · ${model.H===0?'single neuron':'hidden ×'+model.H} · ${paramCount(model)} params`;
-    if (ch.key === 'neuron') c = `<b>the inbox</b> · rose=spam(1) · teal=legit(0)` + (NB.step === 4 ? ` · acc ${(ev.acc*100)|0}% · target 97%${NB.solved ? ' · SOLVED' : ''}` : ` · step ${NB.step+1}/5`);
+    if (ch.key === 'neuron') c = `<b>spam filter</b> · rose=spam · teal=legit` + (NB.step === 4 ? ` · acc ${(ev.acc*100)|0}% · target 97%${NB.solved ? ' · SOLVED' : ''}` : ` · step ${NB.step+1} of 5`);
     if (ch.key === 'learn' && NB.handLoss != null) c += ` · your hand fit ${NB.handLoss.toFixed(2)} → machine ${ev.loss.toFixed(2)}`;
     if (ch.key === 'limit' && model.epoch > 300) c += ` · <i>stuck at ${(ev.acc*100)|0}% — a straight line can't hold rings</i>`;
     if (ch.key === 'blackbox') c += ` · ${model.mask.reduce((a,b)=>a+b,0)}/${model.H} neurons alive`;
@@ -826,8 +847,8 @@
   });
 
   const SLIDER_DEFS = {
-    w0:   { label:'w₁ · weight on x (“!”)', min:-30, max:30, get:()=>model.w[0]*10, set:v=>{model.w[0]=v/10; heatDirty=true;}, fmt:v=>(v/10).toFixed(1) },
-    w1:   { label:'w₂ · weight on y ($)', min:-30, max:30, get:()=>model.w[1]*10, set:v=>{model.w[1]=v/10; heatDirty=true;}, fmt:v=>(v/10).toFixed(1) },
+    w0:   { label:'w₁ · dial on “!” (x₁)', min:-30, max:30, get:()=>model.w[0]*10, set:v=>{model.w[0]=v/10; heatDirty=true;}, fmt:v=>(v/10).toFixed(1) },
+    w1:   { label:'w₂ · dial on $ (x₂)', min:-30, max:30, get:()=>model.w[1]*10, set:v=>{model.w[1]=v/10; heatDirty=true;}, fmt:v=>(v/10).toFixed(1) },
     wb:   { label:'b · bias', min:-30, max:30, get:()=>model.wb*10, set:v=>{model.wb=v/10; heatDirty=true;}, fmt:v=>(v/10).toFixed(1) },
     lr:   { label:'learning rate', min:1, max:2000, get:()=>lr*100, set:v=>lr=v/100, fmt:v=>(v/100).toFixed(2) },
     hidden:{ label:'hidden neurons', min:1, max:8, get:()=>hidden, set:v=>{hidden=v; rebuild(v);}, fmt:v=>v },
@@ -867,6 +888,7 @@
       $('goal').innerHTML = c.goal;
       chapterDefaults(); buildSliders(); buildDsRow(); syncTrainBtn();
       if (c.key === 'neuron') { NB.solved = false; nbSetStep(NB.step); } else { $('stepRow').style.display = 'none'; }
+      $('inspect').classList.toggle('on', c.key === 'neuron' || c.key === 'learn'); inspHTML = '';
       if (c.key === 'learn' && NB.handLoss != null) toast(`your hand fit: loss ${NB.handLoss.toFixed(2)} — watch the machine beat it`, 2600);
     });
     chRow.appendChild(b);
@@ -925,6 +947,7 @@
     <p>This is not an animation of a neural network — it <b>is</b> one. Real forward pass, real loss, real gradients, real backpropagation, running on your phone. The only difference between this and the machinery inside ChatGPT or Claude is <b>what goes in, one architectural idea, and scale</b> — see the last section. Chapters 1–2 are, precisely, <b>logistic regression</b>: the spam-filter algorithm of the 2000s, fit by gradient descent in front of you.</p>
     <h2>glossary — the words that matter</h2>
     <table>
+      <tr><td>the cast</td><td>every symbol here means exactly one thing: <b>x₁, x₂</b> = the inputs · <b>w₁, w₂, b</b> = the dials · <b>score</b> = w₁x₁+w₂x₂+b · <b>guess</b> = σ(score), textbooks call it p · <b>truth</b> = the label, textbooks call it y · <b>error</b> = guess − truth.</td></tr>
       <tr><td>parameter / weight</td><td>one adjustable number. Learning means changing these numbers, nothing else. This toy has 3–33; frontier models have ~10¹².</td></tr>
       <tr><td>neuron</td><td>weighted sum of inputs + bias, squashed by an activation. That's the whole unit. Inputs never multiply each other — each meets only its own weight, then everything is added.</td></tr>
       <tr><td>feature</td><td>one measured input number. Chapter 1: “!”-count and money-words. An email = a list of features; a house = sqft, age, …; a token = hundreds of them.</td></tr>
@@ -933,7 +956,7 @@
       <tr><td>activation</td><td>the squash (tanh, sigmoid) — the only source of curviness. Without it, any depth collapses back to one straight line.</td></tr>
       <tr><td>layer / hidden</td><td>neurons that feed other neurons instead of the output. Their little straight-line views get combined into curves.</td></tr>
       <tr><td>forward pass</td><td>data flowing input → hidden → output. Serving is just this.</td></tr>
-      <tr><td>loss</td><td>one number scoring how wrong the outputs are. Training = make it fall.</td></tr>
+      <tr><td>loss</td><td>how <i>confidently</i> wrong: −ln of the probability given to the truth. Certain and right → ≈0. Barely right (0.51) → 0.67 — still guilty. Certain and wrong → huge. Accuracy only counts sides of the line; loss slopes smoothly, so training follows loss.</td></tr>
       <tr><td>gradient</td><td>for every weight: which direction (and how strongly) nudging it would reduce loss. Computed by <b>backpropagation</b> — the chain rule, run backward.</td></tr>
       <tr><td>learning rate</td><td>step size downhill. Too small: slow. Too big: overshoot and bounce — push past ~12 in ch. 4 and watch a working net destroy itself. (Ch. 2's single neuron is too simple to die: its loss surface is a bowl.)</td></tr>
       <tr><td>epoch</td><td>one pass over the training data.</td></tr>
@@ -943,7 +966,7 @@
       <tr><td>black box</td><td>not secrecy — <b>distributed representation</b>. Every number is visible; the knowledge lives in no single one of them.</td></tr>
     </table>
     <h2>from 33 parameters to a trillion</h2>
-    <p>Scale this toy up and you have the backbone of a language model, honestly: same neurons, same loss-goes-downhill training, same frozen-weights serving. What changes: <b>input</b> — text chopped into <b>tokens</b>, each turned into a list of numbers, instead of (x, y); <b>output</b> — a probability for every possible next token, instead of teal/rose; <b>attention</b> — which you now have, chapters 8–9: every token computes a query, scores every other token's key, and mixes their values; stacked up, that is how every word looks at every other word and decides what's relevant (the "T" in GPT); and <b>scale</b> — billions of parameters, trained on trillions of tokens, for months, on thousands of chips. Why bigger keeps helping is chapter 4's lesson repeated: more neurons = more little detectors whose combinations can express more — and empirically, loss falls smoothly and predictably as parameters and data grow (the <b>scaling laws</b>).</p>
+    <p>Scale this toy up and you have the backbone of a language model, honestly: same neurons, same loss-goes-downhill training, same frozen-weights serving. What changes: <b>input</b> — text chopped into <b>tokens</b>, each turned into a list of numbers, instead of (x₁, x₂); <b>output</b> — a probability for every possible next token, instead of teal/rose; <b>attention</b> — which you now have, chapters 8–9: every token computes a query, scores every other token's key, and mixes their values; stacked up, that is how every word looks at every other word and decides what's relevant (the "T" in GPT); and <b>scale</b> — billions of parameters, trained on trillions of tokens, for months, on thousands of chips. Why bigger keeps helping is chapter 4's lesson repeated: more neurons = more little detectors whose combinations can express more — and empirically, loss falls smoothly and predictably as parameters and data grow (the <b>scaling laws</b>).</p>
     <h2>attention — the 2017 page-turn</h2>
     <p>Chapters 1–7 have <b>fixed wiring</b>: after training, a weight always connects the same two places. Attention adds wiring that <b>moves</b>. Each token asks a question (<b>query</b>), every token advertises what it is (<b>key</b>), query·key scores the match, <b>softmax</b> turns scores into weights, and the weights blend what each token carries (<b>value</b>). The learned matrices (W<sub>q</sub>, W<sub>k</sub>, W<sub>v</sub>) freeze after training — but <b>the weights they compute are rebuilt for every input</b>. Three consequences turned the page: ① a word's representation becomes context-dependent — "bank" beside "river" mixes different neighbors than "bank" beside "loan"; ② any token reaches any other in one hop, no telephone-game relay across a long sentence (RNNs' curse); ③ the whole sequence computes in parallel, which is what let training scale to the whole internet. A transformer is just this, stacked: attention decides <b>where to look</b>, then a chapter-4 style MLP decides <b>what to make of it</b> — alternated ~100 times.</p>
     <p class="src">Honesty: chapters 8–9 are one head, one layer — the smallest real attention there is (gradient-checked, trained live, nothing simulated). Real models stack dozens of layers × dozens of heads with MLP blocks between, plus multi-head splits, layer norm, and causal masks over thousands of tokens. The famous in-context copying trick — "induction heads" — needs <i>two</i> cooperating layers, one step beyond this toy. Chapters 1–7 also use full-batch descent (8–9 use minibatches) and no Adam/momentum; those make it bigger and faster, not different.</p>`;
@@ -953,10 +976,11 @@
   // ================= go =================
   resize();
   chapterDefaults(); nbSetStep(0); buildDsRow(); syncTrainBtn();
+  $('inspect').classList.add('on');
   toast('7 chapters, left to right · everything is a real network', 3000);
   requestAnimationFrame(loop);
   window.LAB = { makeModel, forward, trainEpoch, evalSet, makeData, paramCount,
-    NB, NB_STEPS, nbSetStep, pickInspect, gradNow, exQ, moQ, CHDEF: CH,
+    NB, NB_STEPS, nbSetStep, inspectData, renderInspect, gradNow, exQ, moQ, CHDEF: CH,
     getData: () => data, getModel: () => model, setCh: i => { ch = CH[i]; chapterDefaults(); },
     drawAll: () => { drawWorld(); drawNet(); drawStat(); },
     AT, atInit, atDeal, atForward, atBackward, atZeroGrads, atTrainStep,
