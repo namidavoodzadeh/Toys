@@ -3,10 +3,13 @@
 ## What this is
 Self-contained HTML learning toys served at
 `https://namidavoodzadeh.github.io/Toys/<file>.html` and used on an iPhone
-(Safari → share → Add to Home Screen). The active project is
-**little-learner.html** — a real neural network (MLP + a real one-head
-attention layer) that trains live on the phone, built to teach how LLMs
-work starting from zero.
+(Safari → share → Add to Home Screen). Two-part curriculum:
+**little-learner.html** (complete, maintain) — a real neural network
+(MLP + a real one-head attention layer) that trains live on the phone —
+and **little-llm.html** (active) — the build-a-language-model arc.
+Nami finished little-learner in Aug 2026; his verdict: chapters 1–7
+landed, the neuron→attention jump did not. Attention must be re-taught
+INSIDE a language model, after a felt failure, which is little-llm's job.
 
 Every toy is ONE html file: inline CSS + JS, no external dependencies,
 no build step, no network calls. iOS Files/Quick Look does NOT execute
@@ -34,6 +37,12 @@ suggestions.
    collides with the cast gets translated, never imported. The harness
    greps for forbidden strings — extend that list whenever a new
    collision risk appears.
+   little-llm's cast: `the book` (the on-screen text, the machine's
+   whole world) · `next` (the letter to guess) · `context` (letters
+   already seen) · `count` · `share = count ÷ row total` · `temp` ·
+   `babble` (generated text). Jargon is banned until a chapter earns
+   it: probability, distribution, token, n-gram, corpus, stochastic
+   must not appear anywhere in the file (harness-llm greps).
 2. **Word budget.** Any instruction text: main sentence ≤ 22 words,
    total ≤ 45 including the `.sub` line. Enforced by the harness.
 3. **Type scale.** Goal text 14px, inspector panel 13px, caption 12px,
@@ -61,10 +70,12 @@ suggestions.
    ch. 4, where it is true.
 
 ## Verification workflow — required before every ship
-1. Edit `little-learner.html`.
+1. Edit the toy's html file.
 2. Syntax: extract the `<script>` body and `node --check` it.
-3. Behavior: `node harness9.js` → **all checks must pass** (currently
-   22). The harness stubs the DOM, boots the app headlessly, and tests:
+3. Behavior: `node harness9.js` for little-learner (22 checks),
+   `node harness-llm.js` for little-llm (21 checks) → **all must
+   pass**. Run BOTH before any push that touches either file.
+   harness9 stubs the DOM, boots little-learner headlessly, and tests:
    forbidden-notation grep, the cast + thermostat present, type scale,
    word budgets, inspector arithmetic exact vs the network, thermostat
    semantics per email, ▲/▼ arrow direction vs actual dial movement
@@ -77,11 +88,23 @@ suggestions.
    redeploys automatically; the phone URL stays the same (re-add to home
    screen if iOS caches an old version).
 
-The app exposes internals for testing via `window.LAB`: makeModel,
+harness-llm tests: jargon grep, cast, type scale, word budgets, book
+purity (28 glyphs only), bigram counts vs an independent recount,
+share arithmetic + temperature monotonicity, seeded draws vs shares,
+deterministic generation, cell-inspector exactness, game scoring +
+unlock at 12 guesses, the wall (28ⁿ exact, coverage <0.1% at n=4,
+one-way steps 4%→71%, quote length ≤14 → ≥20 across seeds), verdict
+tones at endpoints, draw paths.
+
+little-learner exposes internals for testing via `window.LAB`: makeModel,
 forward, trainEpoch, evalSet, makeData, run, the attention suite
 (atInit/atForward/atBackward/atTrainStep), and the ch-1/2 layer (NB,
 NB_STEPS, nbSetStep, inspectData, renderInspect, gradNow, setCh,
-getData, getModel, drawAll). Keep LAB current when refactoring.
+getData, getModel, drawAll). little-llm exposes `window.LM`: BOOK,
+VOCAB, getTable, shares, pickIdx, generate, longestCopy, wallStats,
+verdict, cellInfo, renderCell, buildNow, babble, game (state/tap/
+newSentence), setCh, setTemp, setN, drawAll, CH_GOALS, unlocked.
+Keep LAB and LM current when refactoring.
 
 ## Current verified state (do not re-derive; extend)
 - 9 chapters: 1 Neuron (5-step guided spam-filter story, hand-fit,
@@ -100,6 +123,20 @@ getData, getModel, drawAll). Keep LAB current when refactoring.
   stays finite and fits (convex). Hand-solvable at 100% within slider
   range.
 - Chapters 1–2 are exactly logistic regression; the manual says so.
+- little-llm ch 1–3 shipped 2026-08-29: 1 The Game (he taps the next
+  letter of book sentences, scored, 12 guesses unlock) · 2 The Counter
+  (bigram counts of the 849-letter book, animated heatmap, tap-a-cell
+  arithmetic, temp slider, live babble) · 3 The Wall (context 1–4:
+  rows 24→111→226→329 of 28ⁿ, one-way steps 4%→27%→53%→71%, longest
+  verbatim quote ~8–10 → 22–37 letters; verdict text tied to measured
+  thresholds). All model math is a count table — no fake ML, and no
+  neural net yet, by design.
+- little-llm planned arc (promising, unbuilt): dials replace the table
+  (tiny neural bigram, generalization vs memorization shown on the
+  same wall stats) → letters as learned vectors → fixed-window model
+  and its felt failure → attention as the rescue, visualized on real
+  text → stack + train a tiny transformer live on the phone → serve
+  with temp. Attention must NOT appear before the window model fails.
 
 ## Visual identity (all toys)
 Background `#06070b`, ink `#e9e4d8`, lamp gold `#f0b85a` (primary

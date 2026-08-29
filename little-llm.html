@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06070b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LLM">
+<title>Little LLM — build a language model from zero</title>
+<style>
+  :root{
+    --bg:#06070b; --ink:#e9e4d8; --mute:#8d8a80;
+    --line:rgba(233,228,216,0.12); --panel:rgba(12,13,19,0.82);
+    --lamp:#f0b85a; --teal:#3fd1a5; --violet:#c98bff; --rose:#ff6e6e; --blue:#4fc1ff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;
+    overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  #app{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow-y:auto;
+    padding:calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 10px)}
+  #hud{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px 6px;gap:8px}
+  #hud .t{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;white-space:nowrap}
+  #hud .t b{font-weight:600}
+  #hud .t span{color:var(--mute)}
+  #infoBtn{background:none;border:1px solid var(--line);color:var(--mute);border-radius:50%;
+    width:26px;height:26px;font-size:13px;line-height:1;cursor:pointer;padding:0;flex:none;margin-left:auto}
+  .pills{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .pills::-webkit-scrollbar{display:none}
+  .pills button{flex:none;background:var(--panel);border:1px solid var(--line);color:var(--mute);
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    padding:8px 10px;border-radius:10px;cursor:pointer;white-space:nowrap}
+  .pills button.on{color:var(--lamp);border-color:rgba(240,184,90,.6)}
+  .pills button.lock{opacity:.35}
+  #goal{font-size:14px;line-height:1.5;color:var(--ink);padding:0 4px 8px}
+  #goal .sub{display:block;font-size:12px;color:var(--mute);padding-top:2px}
+  #goal b{color:var(--lamp);font-weight:600}
+  .hide{display:none!important}
+  #game{padding:0 2px}
+  #sent{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:16px;line-height:1.7;letter-spacing:.02em;
+    border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px;min-height:76px;word-break:break-all}
+  #sent .pre{color:var(--mute)} #sent .hit{color:var(--teal)} #sent .miss{color:var(--rose)}
+  #sent .cur{color:var(--lamp);animation:bl 1s step-end infinite}
+  @keyframes bl{50%{opacity:0}}
+  #scorebar{padding:8px 2px 6px}
+  #scoreTxt{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.05em;color:var(--mute);text-transform:uppercase;padding-bottom:5px}
+  #scoreTxt b{color:var(--ink)}
+  #bar{position:relative;height:8px;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  #barFill{position:absolute;left:0;top:0;bottom:0;background:var(--teal);width:0%}
+  #barChance{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--rose);left:3.6%}
+  #keys{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding-top:6px}
+  #keys button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:16px;min-height:44px;border-radius:10px;cursor:pointer;padding:0}
+  #keys button:active{transform:scale(.94)}
+  #keys button.good{border-color:var(--teal);color:var(--teal)}
+  #keys button.bad{border-color:var(--rose);color:var(--rose)}
+  #board{width:100%;border:1px solid var(--line);border-radius:14px;display:block;touch-action:none}
+  #tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:8px}
+  .tile{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:9px 11px}
+  .tile .tv{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;color:var(--ink)}
+  .tile .tv b{color:var(--lamp);font-weight:600}
+  .tile .tk{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);padding-top:3px}
+  #inspect{display:none;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;line-height:1.8;
+    color:var(--ink);border:1px solid var(--line);border-radius:12px;background:var(--panel);
+    padding:9px 12px;margin-top:8px}
+  #inspect.on{display:block}
+  #inspect b{color:var(--lamp);font-weight:600}
+  #inspect .dim{color:var(--mute)}
+  #out{display:none;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;line-height:1.8;
+    color:var(--ink);border:1px solid var(--line);border-radius:12px;background:var(--panel);
+    padding:9px 12px;margin-top:8px;word-break:break-all;min-height:44px}
+  #out.on{display:block}
+  #out u{color:var(--lamp);text-decoration-color:rgba(240,184,90,.6);text-underline-offset:3px}
+  #bookBox{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-top:8px;overflow:hidden}
+  #bookHead{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--mute);padding:9px 12px;cursor:pointer}
+  #bookHead b{color:var(--lamp);font-weight:600}
+  #bookText{display:none;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.05em;line-height:1.7;
+    color:var(--mute);padding:0 12px 10px;max-height:150px;overflow-y:auto;word-break:break-all}
+  #bookText.on{display:block}
+  #cap{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.05em;color:var(--mute);
+    text-transform:uppercase;padding:8px 4px 0;min-height:17px;line-height:1.5}
+  #cap b{font-weight:600;color:var(--lamp)}
+  #cap i{font-style:normal;color:var(--rose)}
+  #dock{padding-top:8px}
+  #sliders{padding:6px 10px 4px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:8px}
+  #sliders:empty{display:none}
+  .slider{display:grid;grid-template-columns:122px 1fr 40px;align-items:center;gap:10px;
+    font-size:11.5px;color:var(--mute);letter-spacing:.04em;text-transform:uppercase;margin:1px 0}
+  .slider output{text-align:right;color:var(--ink);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px}
+  input[type=range]{width:100%;accent-color:var(--lamp);height:26px;margin:0;background:transparent}
+  .row{display:flex;gap:7px;padding-top:2px}
+  .row button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    font:inherit;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    padding:12px 6px;border-radius:12px;flex:1;min-height:44px;cursor:pointer}
+  .row button:active{transform:scale(.97)}
+  .row button.primary{background:var(--lamp);color:#1c1304;border-color:var(--lamp);font-weight:700}
+  .row button[disabled]{opacity:.4}
+  #toast{position:fixed;left:50%;top:30%;transform:translateX(-50%);max-width:86vw;text-align:center;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink);background:rgba(12,13,19,.85);border:1px solid var(--line);border-radius:10px;padding:9px 14px;
+    opacity:0;transition:opacity .35s;pointer-events:none;line-height:1.7;z-index:8}
+  #info{display:none;position:fixed;inset:0;background:rgba(6,7,11,.95);z-index:9;
+    padding:calc(env(safe-area-inset-top) + 26px) 22px 30px;
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);overflow:auto}
+  #info.on{display:block}
+  #info h2{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--lamp);margin:16px 0 10px}
+  #info h2:first-child{margin-top:0}
+  #info p{font-size:13px;line-height:1.55;color:var(--ink);margin:0 0 10px}
+  #info p b{color:var(--lamp);font-weight:600}
+  #info table{width:100%;border-collapse:collapse;font-size:12px;margin:0 0 10px}
+  #info td{padding:5px 6px;border-top:1px solid var(--line);vertical-align:top;line-height:1.45}
+  #info td:first-child{color:var(--teal);font-family:ui-monospace,"SF Mono",Menlo,monospace;white-space:nowrap;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+  #info .close{margin-top:12px;width:100%;padding:13px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="t"><b>little llm</b> <span>· build one from zero</span></div>
+    <button id="infoBtn" aria-label="glossary and manual">i</button>
+  </div>
+  <div class="pills" id="chRow"></div>
+  <div id="goal">—</div>
+  <div id="game">
+    <div id="sent"></div>
+    <div id="scorebar">
+      <div id="scoreTxt">—</div>
+      <div id="bar"><div id="barFill"></div><div id="barChance"></div></div>
+    </div>
+    <div id="keys"></div>
+  </div>
+  <canvas id="board" class="hide"></canvas>
+  <div id="tiles" class="hide"></div>
+  <div id="inspect"></div>
+  <div id="out"></div>
+  <div id="bookBox">
+    <div id="bookHead">—</div>
+    <div id="bookText"></div>
+  </div>
+  <div id="cap">—</div>
+  <div id="dock">
+    <div id="sliders"></div>
+    <div class="row" id="btnRow"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="info"><div id="infoBody"></div><button class="close" id="infoClose">back to the lab</button></div>
+
+<script>
+(() => {
+const VOCAB='abcdefghijklmnopqrstuvwxyz .';
+const NV=VOCAB.length;
+const IDX={}; [...VOCAB].forEach((c,i)=>IDX[c]=i);
+const GLYPH=c=>c===' '?'␣':c;
+const COL={ink:'#e9e4d8',mute:'#8d8a80',lamp:'#f0b85a',teal:'#3fd1a5',rose:'#ff6e6e',blue:'#4fc1ff',bg:'#06070b'};
+const $=id=>document.getElementById(id);
+
+const BOOK='the cat sat on the mat. the dog sat on the log. the cat saw the dog and ran. the dog ran to the cat. the sun was hot and the mat was warm. a cat can sit and a dog can run. the man had a hat and a map. the man ran to the van. the rat sat on the map. the cat saw the rat and the rat hid. the dog dug and dug in the sand. the man got the map and the hat. the sun set and the sky was red. the cat and the dog sat on the mat. the rat ran to the log. a man and a dog met a cat. the cat hid in the hat. the dog got wet in the rain. the rain hit the tin roof. the man lit the lamp. the lamp was dim but warm. the cat naps on the warm mat. the dog naps by the door. the moon rose and the fog came. the fog hid the moon. the cat sang to the moon. the dog dug by the log. the man met the men at the mill. the men had hats and maps. the cat sat and the sun set.';
+
+// ---- seeded rng ----
+const rngOf=s=>()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+
+// ---- count tables (the whole model) ----
+const tables={};
+function getTable(n){
+  if(tables[n]) return tables[n];
+  const m=new Map();
+  for(let i=n;i<BOOK.length;i++){
+    const ctx=BOOK.slice(i-n,i);
+    let row=m.get(ctx); if(!row){row=new Float64Array(NV); m.set(ctx,row);}
+    row[IDX[BOOK[i]]]++;
+  }
+  tables[n]=m; return m;
+}
+function rowTotal(row){let t=0;for(let i=0;i<NV;i++)t+=row[i];return t;}
+function shares(row,temp){
+  const w=new Float64Array(NV); let s=0;
+  for(let i=0;i<NV;i++){ w[i]=row[i]>0?Math.pow(row[i],1/temp):0; s+=w[i]; }
+  if(s>0) for(let i=0;i<NV;i++) w[i]/=s;
+  return w;
+}
+function pickIdx(rng,sh){
+  let r=rng(),a=0,last=0;
+  for(let i=0;i<NV;i++){ if(sh[i]>0)last=i; a+=sh[i]; if(r<a) return i; }
+  return last;
+}
+function generate(n,len,temp,seed){
+  const rng=rngOf(seed);
+  for(let k=1;k<=n;k++) getTable(k);
+  const i0=n+Math.floor(rng()*(BOOK.length-n));
+  let ctx=BOOK.slice(i0-n,i0), out='', forced=0, dead=0;
+  for(let s=0;s<len;s++){
+    let k=n,row=null;
+    while(k>=1){ row=tables[k].get(ctx.slice(-k)); if(row) break; k--; }
+    if(k<n) dead++;
+    if(!row) row=tables[1].get('e');
+    let nz=0; for(let i=0;i<NV;i++) if(row[i]>0) nz++;
+    if(k===n && nz===1) forced++;
+    const ci=pickIdx(rng,shares(row,temp));
+    const ch=VOCAB[ci]; out+=ch; ctx=(ctx+ch).slice(-n);
+  }
+  return {out,forced,dead,steps:len};
+}
+function longestCopy(out){
+  let best=0,bi=0;
+  for(let i=0;i<out.length;i++){
+    let l=best+1;
+    while(i+l<=out.length && BOOK.includes(out.slice(i,i+l))){ best=l; bi=i; l++; }
+  }
+  return {len:best,at:bi};
+}
+const wallCache={};
+function wallStats(n){
+  if(wallCache[n]) return wallCache[n];
+  const g=generate(n,300,1,101);
+  wallCache[n]={ rows:getTable(n).size, poss:Math.pow(NV,n),
+    forcedShare:g.forced/g.steps, deadShare:g.dead/g.steps,
+    copy:longestCopy(g.out), sample:g.out };
+  return wallCache[n];
+}
+function verdict(n){
+  const s=wallStats(n);
+  if(s.forcedShare>=0.6||s.copy.len>=25)
+    return {tone:'copy', text:'mostly one-way streets — it <i>replays the book</i>. counting memorizes; it cannot invent'};
+  if(s.forcedShare>=0.2)
+    return {tone:'dry', text:'choices are drying up — real words now, but fewer paths'};
+  return {tone:'invent', text:'every step has real choices — it invents, but the words are mush'};
+}
+
+// ---- chapters + unlock ----
+const CH_GOALS=[
+ {name:'game',  goal:'You be the machine: read, then tap the letter you think comes <b>next</b>.<span class="sub">score yourself — an LLM’s entire training is this game, scored by surprise.</span>'},
+ {name:'count', goal:'A machine that only <b>counts</b>: every pair of letters in the book, tallied.<span class="sub">then it babbles — each next letter drawn from the counts. tap any cell for the arithmetic.</span>'},
+ {name:'wall',  goal:'Give the counter more <b>context</b> and watch it stop inventing and start copying.<span class="sub">the table explodes, choices dry up, and babble turns into quotes from the book.</span>'}
+];
+const CH_LABEL=['1 · the game','2 · the counter','3 · the wall'];
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+let unlocked=Math.min(3,Math.max(1,parseInt(lsGet('llm-unlock')||'1',10)||1));
+let cur=0;
+function unlock(k,msg){
+  if(k<=unlocked) return;
+  unlocked=k; lsSet('llm-unlock',String(unlocked));
+  renderPills(); if(msg) toast(msg);
+}
+
+// ---- state ----
+const S={temp:1,n:1};
+const C={built:false,animI:0,anim:false,animTbl:null};
+let lastRowChar=null;
+
+// ---- ch1: the game ----
+const SENTS=(()=>{
+  const raw=BOOK.split('. ').map(s=>s.trim().replace(/\.$/,'')).filter(s=>s.length>=18&&s.length<=48);
+  const rng=rngOf(5), a=raw.slice();
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); const t=a[i];a[i]=a[j];a[j]=t; }
+  return a;
+})();
+const G={si:0,sent:'',pos:0,right:0,total:0,streak:0,best:0,marks:[]};
+function newSentence(){
+  G.sent=SENTS[G.si%SENTS.length]+'.'; G.si++;
+  G.pos=4; G.marks=['pre','pre','pre','pre'];
+}
+function tapKey(i){
+  if(G.pos>=G.sent.length) newSentence();
+  const truth=G.sent[G.pos];
+  const hit=VOCAB[i]===truth;
+  G.marks.push(hit?'hit':'miss'); G.pos++;
+  G.total++; if(hit){G.right++;G.streak++;G.best=Math.max(G.best,G.streak);}else G.streak=0;
+  if(G.pos>=G.sent.length) newSentence();
+  if(G.total>=12) unlock(2,'you just did an llm’s whole job — a trillion rounds of this game. the counter is unlocked');
+  if(cur===0) renderGame();
+  return {hit,truth};
+}
+function renderGame(){
+  let h='';
+  for(let i=0;i<G.pos;i++) h+='<span class="'+G.marks[i]+'">'+GLYPH(G.sent[i])+'</span>';
+  h+='<span class="cur">▮</span>';
+  $('sent').innerHTML=h;
+  const pct=G.total?Math.round(100*G.right/G.total):0;
+  $('scoreTxt').innerHTML='right <b>'+G.right+'/'+G.total+'</b> · streak <b>'+G.streak+'</b> · blind luck 3.6%';
+  $('barFill').style.width=pct+'%';
+  $('cap').innerHTML=G.total<12?('guess '+Math.min(12,G.total+1)+' of 12 to unlock the counter')
+    :('you read the book without reading it — that is a language model');
+}
+function buildKeys(){
+  let h='';
+  for(let i=0;i<NV;i++) h+='<button data-k="'+i+'">'+GLYPH(VOCAB[i])+'</button>';
+  $('keys').innerHTML=h;
+  $('keys').addEventListener('pointerdown',e=>{
+    const b=e.target.closest?e.target.closest('button'):null; if(!b) return;
+    const r=tapKey(parseInt(b.dataset.k,10));
+    b.classList.add(r.hit?'good':'bad');
+    setTimeout(()=>{b.classList.remove('good');b.classList.remove('bad');},260);
+  });
+}
+
+// ---- ch2: heatmap ----
+const board=$('board'), bctx=board.getContext('2d');
+let cell=11, off=16, boardW=0;
+function sizeBoard(){
+  const rect=board.getBoundingClientRect();
+  const w=rect.width||350;
+  const dpr=window.devicePixelRatio||1;
+  cell=Math.max(9,Math.floor((w-off-4)/NV));
+  const hCss=off+cell*NV+6;
+  board.width=Math.round(w*dpr); board.height=Math.round(hCss*dpr);
+  board.style.height=hCss+'px';
+  bctx.setTransform(dpr,0,0,dpr,0,0);
+  boardW=w;
+}
+function drawHeat(tbl,hl){
+  sizeBoard();
+  bctx.fillStyle=COL.bg; bctx.fillRect(0,0,boardW,off+cell*NV+6);
+  const t=tbl||getTable(1);
+  let mx=1; t.forEach(row=>{for(let i=0;i<NV;i++) if(row[i]>mx)mx=row[i];});
+  bctx.font='10px ui-monospace,Menlo,monospace'; bctx.textAlign='center'; bctx.textBaseline='middle';
+  for(let i=0;i<NV;i++){
+    bctx.fillStyle=COL.mute;
+    bctx.fillText(GLYPH(VOCAB[i]),off+i*cell+cell/2,8);
+    bctx.fillText(GLYPH(VOCAB[i]),7,off+i*cell+cell/2);
+  }
+  for(let r=0;r<NV;r++){
+    const row=t.get(VOCAB[r]); if(!row) continue;
+    for(let c=0;c<NV;c++){
+      if(row[c]<=0) continue;
+      bctx.globalAlpha=0.12+0.88*Math.sqrt(row[c]/mx);
+      bctx.fillStyle=COL.lamp;
+      bctx.fillRect(off+c*cell+1,off+r*cell+1,cell-2,cell-2);
+    }
+  }
+  bctx.globalAlpha=1;
+  if(hl!=null&&IDX[hl]!=null){
+    bctx.strokeStyle=COL.teal; bctx.lineWidth=1;
+    bctx.strokeRect(off+0.5,off+IDX[hl]*cell+0.5,cell*NV-1,cell-1);
+  }
+}
+function cellInfo(rc,cc){
+  const row=getTable(1).get(rc); if(!row) return null;
+  const count=row[IDX[cc]], tot=rowTotal(row);
+  const sh=tot?count/tot:0;
+  const tsh=shares(row,S.temp)[IDX[cc]];
+  return {count,tot,share:sh,tempShare:tsh};
+}
+function renderCell(rc,cc){
+  const I=cellInfo(rc,cc); if(!I) return;
+  let h='after ‘'+GLYPH(rc)+'’ · ‘'+GLYPH(cc)+'’ came <b>'+I.count+'</b> of <b>'+I.tot+'</b><br>'
+       +'share = '+I.count+' ÷ '+I.tot+' = <b>'+Math.round(100*I.share)+'%</b>';
+  if(Math.abs(S.temp-1)>1e-9)
+    h+='<br><span class="dim">at temp '+S.temp.toFixed(1)+' the share is <b>'+Math.round(100*I.tempShare)+'%</b></span>';
+  $('inspect').innerHTML=h; $('inspect').classList.add('on');
+}
+board.addEventListener('pointerdown',e=>{
+  if(cur!==1) return;
+  if(!C.built){ toast('press count first'); return; }
+  const rect=board.getBoundingClientRect();
+  const c=Math.floor((e.clientX-rect.left-off)/cell), r=Math.floor((e.clientY-rect.top-off)/cell);
+  if(r<0||c<0||r>=NV||c>=NV) return;
+  renderCell(VOCAB[r],VOCAB[c]);
+});
+
+// ---- count animation (show only; getTable is the truth) ----
+function startCount(){
+  if(C.anim) return;
+  getTable(1);
+  C.anim=true; C.animI=1; C.animTbl=new Map();
+  const tick=()=>{
+    let n=0;
+    while(n<24&&C.animI<BOOK.length){
+      const ctx1=BOOK[C.animI-1];
+      let row=C.animTbl.get(ctx1); if(!row){row=new Float64Array(NV);C.animTbl.set(ctx1,row);}
+      row[IDX[BOOK[C.animI]]]++; C.animI++; n++;
+    }
+    drawHeat(C.animTbl,null);
+    $('cap').innerHTML='counting… <b>'+(C.animI-1)+'</b> / '+(BOOK.length-1)+' pairs';
+    if(C.animI<BOOK.length) setTimeout(tick,16);
+    else{
+      C.anim=false; C.built=true; drawHeat(null,null);
+      $('cap').innerHTML='<b>'+(BOOK.length-1)+'</b> pairs counted · tap any cell for its arithmetic';
+      renderDock();
+    }
+  };
+  tick();
+}
+function buildNow(){ getTable(1); C.built=true; }
+
+// ---- babble ----
+let babbling=false;
+function babble(n,len,temp,seed){
+  const res=generate(n,len,temp,seed==null?((Math.random()*1e9)|0):seed);
+  res.copy=longestCopy(res.out);
+  unlock(3,'the counter is about to hit a wall — chapter 3 unlocked');
+  return res;
+}
+function showBabble(res,markCopy){
+  const o=$('out'); o.classList.add('on');
+  if(babbling) return;
+  let i=0; babbling=true;
+  const tick=()=>{
+    i=Math.min(res.out.length,i+2);
+    o.textContent=res.out.slice(0,i)+(i<res.out.length?'▮':'');
+    if(cur===1) drawHeat(null,res.out[i-1]||null);
+    if(i<res.out.length) setTimeout(tick,34);
+    else{
+      babbling=false;
+      if(markCopy&&res.copy.len>3){
+        const a=res.copy.at,b=res.copy.at+res.copy.len;
+        o.innerHTML=esc(res.out.slice(0,a))+'<u>'+esc(res.out.slice(a,b))+'</u>'+esc(res.out.slice(b));
+      }
+      if(cur===1){ drawHeat(null,null); $('cap').innerHTML='drawn letter by letter from the counts · temp <b>'+S.temp.toFixed(1)+'</b>'; }
+      if(cur===2) renderWallCap(res);
+    }
+  };
+  tick();
+}
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+// ---- ch3 ----
+function fmtInt(x){ return String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+const POSS_LABEL=['28','28² = 784','28³ = 21,952','28⁴ = 614,656'];
+function renderTiles(){
+  const s=wallStats(S.n);
+  $('tiles').innerHTML=
+   '<div class="tile"><div class="tv">'+POSS_LABEL[S.n-1]+'</div><div class="tk">contexts possible</div></div>'
+  +'<div class="tile"><div class="tv"><b>'+fmtInt(s.rows)+'</b></div><div class="tk">contexts the book showed</div></div>'
+  +'<div class="tile"><div class="tv"><b>'+Math.round(100*s.forcedShare)+'%</b></div><div class="tk">steps with one way out</div></div>'
+  +'<div class="tile"><div class="tv"><b>'+Math.round(100*s.deadShare)+'%</b></div><div class="tk">dead ends hit</div></div>';
+}
+function renderWallCap(res){
+  const v=verdict(S.n);
+  const c=res?res.copy:wallStats(S.n).copy;
+  $('cap').innerHTML=v.text+' · longest quote: <b>'+c.len+'</b> letters';
+}
+
+// ---- toast ----
+let toastT=null;
+function toast(msg){
+  const t=$('toast'); t.innerHTML=msg; t.style.opacity=1;
+  if(toastT) clearTimeout(toastT);
+  toastT=setTimeout(()=>{t.style.opacity=0;},2600);
+}
+
+// ---- chrome ----
+function renderPills(){
+  let h='';
+  for(let i=0;i<3;i++){
+    const lockd=i>=unlocked;
+    h+='<button data-ch="'+i+'" class="'+(i===cur?'on':'')+(lockd?' lock':'')+'">'+CH_LABEL[i]+(lockd?' · locked':'')+'</button>';
+  }
+  $('chRow').innerHTML=h;
+  $('chRow').addEventListener('pointerdown',e=>{
+    const b=e.target.closest?e.target.closest('button'):null; if(!b) return;
+    const i=parseInt(b.dataset.ch,10);
+    if(i>=unlocked){ toast(i===1?'play the game first — 12 guesses':'meet the counter first'); return; }
+    setCh(i);
+  });
+}
+function renderDock(){
+  let sl='',btn='';
+  if(cur===0){
+    btn='<button id="skipBtn">new line</button>';
+  }else if(cur===1){
+    sl='<div class="slider"><span>temp · sharpen↔loosen</span><input type="range" id="tempS" min="0.3" max="3" step="0.1" value="'+S.temp+'"><output id="tempO">'+S.temp.toFixed(1)+'</output></div>';
+    btn='<button class="primary" id="countBtn">'+(C.built?'recount':'count the book')+'</button><button id="babBtn"'+(C.built?'':' disabled')+'>babble</button>';
+  }else{
+    sl='<div class="slider"><span>context · letters seen</span><input type="range" id="nS" min="1" max="4" step="1" value="'+S.n+'"><output id="nO">'+S.n+'</output></div>';
+    btn='<button class="primary" id="babBtn2">babble with context '+S.n+'</button>';
+  }
+  $('sliders').innerHTML=sl; $('btnRow').innerHTML=btn;
+  if(cur===0){ $('skipBtn').addEventListener('pointerdown',()=>{newSentence();renderGame();}); }
+  if(cur===1){
+    $('tempS').addEventListener('input',e=>{S.temp=parseFloat(e.target.value);$('tempO').textContent=S.temp.toFixed(1);});
+    $('countBtn').addEventListener('pointerdown',startCount);
+    $('babBtn').addEventListener('pointerdown',()=>{ if(!C.built||babbling)return; showBabble(babble(1,140,S.temp),false); });
+  }
+  if(cur===2){
+    $('nS').addEventListener('input',e=>{S.n=parseInt(e.target.value,10);$('nO').textContent=S.n;renderDock();drawAll();});
+    $('babBtn2').addEventListener('pointerdown',()=>{ if(babbling)return; showBabble(babble(S.n,140,1),true); });
+  }
+}
+function setCh(i){
+  if(i>=unlocked) return;
+  cur=i;
+  $('goal').innerHTML=CH_GOALS[i].goal;
+  $('game').classList.toggle('hide',i!==0);
+  $('board').classList.toggle('hide',i!==1);
+  $('tiles').classList.toggle('hide',i!==2);
+  $('inspect').classList.remove('on');
+  $('out').classList.remove('on');
+  $('bookBox').classList.toggle('hide',i===0);
+  renderPills(); renderDock(); drawAll();
+}
+function drawAll(){
+  if(cur===0){ renderGame(); }
+  if(cur===1){
+    drawHeat(C.built?null:(C.animTbl||new Map()),null);
+    if(!C.anim) $('cap').innerHTML=C.built
+      ?('<b>'+(BOOK.length-1)+'</b> pairs counted · tap any cell for its arithmetic')
+      :'press <b>count the book</b> — watch the table fill';
+  }
+  if(cur===2){ renderTiles(); renderWallCap(null); }
+}
+
+// ---- info ----
+$('infoBody').innerHTML=
+ '<h2>the cast · one symbol, one meaning</h2>'
++'<table>'
++'<tr><td>the book</td><td>the small text on screen — the only thing the machine ever sees. tap its header to read it.</td></tr>'
++'<tr><td>next</td><td>the one letter about to come. the whole game, and the whole of an LLM, is guessing it.</td></tr>'
++'<tr><td>context</td><td>the letters already seen, the only clue for guessing next. chapter 3 turns its length up.</td></tr>'
++'<tr><td>count</td><td>how many times a pairing appeared in the book. the table of counts is the entire model in chapter 2.</td></tr>'
++'<tr><td>share</td><td>count ÷ row total — the slice of the pie a letter gets when the machine draws.</td></tr>'
++'<tr><td>temp</td><td>reshapes the shares before drawing. low temp: the biggest share hogs the pie. high temp: shares even out.</td></tr>'
++'<tr><td>babble</td><td>generated text: draw a letter, slide the context, draw again. LLMs answer you the same way, word by word.</td></tr>'
++'</table>'
++'<h2>honesty</h2>'
++'<p>Nothing here is faked. The counts on screen come from the book on screen; every babble is drawn live from those counts, one letter at a time; nothing is pre-written. The stats in chapter 3 are measured on the babble you just made.</p>'
++'<h2>brain note</h2>'
++'<p>Your brain plays chapter 1 all day: it guesses the next word before you finish reading, and it learns from the surprise when it is wrong. That surprise-driven update is a close cousin of <b>error = guess − truth</b> from little learner — in the brain, dopamine carries a signal like it.</p>'
++'<h2>where this goes</h2>'
++'<p>The counter dies at long context (chapter 3 shows exactly how). The fix is the machine you already know: <b>dials</b>. Coming chapters replace the table with weights that squeeze letters into vectors, watch a fixed window fail, and let attention arrive as the rescue — inside a tiny real LLM training on this phone.</p>';
+$('infoBtn').addEventListener('pointerdown',()=>$('info').classList.add('on'));
+$('infoClose').addEventListener('pointerdown',()=>$('info').classList.remove('on'));
+
+// ---- book box ----
+$('bookHead').innerHTML='the book · <b>'+BOOK.length+'</b> letters · tap to read';
+$('bookText').textContent=BOOK;
+$('bookHead').addEventListener('pointerdown',()=>$('bookText').classList.toggle('on'));
+
+// ---- boot ----
+buildKeys(); newSentence();
+window.addEventListener('resize',()=>drawAll());
+setCh(Math.min(cur,unlocked-1));
+
+// ---- exposed for the harness ----
+window.LM={VOCAB,NV,IDX,BOOK,CH_GOALS,
+  rng:rngOf,getTable,rowTotal,shares,pickIdx,generate,longestCopy,wallStats,verdict,
+  cellInfo,renderCell,buildNow,babble,
+  game:{state:G,tap:tapKey,newSentence},
+  setCh,drawAll,setTemp:v=>{S.temp=v;},setN:v=>{S.n=v;},
+  get unlocked(){return unlocked;}, get cur(){return cur;}, S};
+})();
+</script>
+</body>
+</html>
