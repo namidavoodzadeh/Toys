@@ -1,0 +1,2747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06070b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Machine">
+<title>The Language Machine — an eight-act game that builds a real LLM in your hand</title>
+<style>
+  :root{
+    --bg:#06070b; --ink:#e9e4d8; --mute:#8d8a80;
+    --line:rgba(233,228,216,0.12); --panel:rgba(12,13,19,0.82);
+    --lamp:#f0b85a; --teal:#3fd1a5; --violet:#c98bff; --rose:#ff6e6e; --blue:#4fc1ff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;
+    overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  #app{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;max-width:560px;margin:0 auto;
+    padding:calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 16px)}
+  #hud{display:flex;justify-content:space-between;align-items:center;padding:0 4px 8px;gap:8px}
+  #hud .t{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;white-space:nowrap;cursor:pointer}
+  #hud .t b{font-weight:600}
+  #hud .t span{color:var(--mute)}
+  #hud .hbtns{display:flex;gap:6px;margin-left:auto}
+  #hud .hbtns button{background:var(--panel);border:1px solid var(--line);color:var(--mute);border-radius:10px;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    padding:8px 10px;cursor:pointer;min-height:34px}
+  #hud .hbtns button.new{color:var(--lamp);border-color:rgba(240,184,90,.6)}
+  .hide{display:none!important}
+  #goal{font-size:14px;line-height:1.5;color:var(--ink);padding:0 4px 10px}
+  #goal .sub{display:block;font-size:12px;color:var(--mute);padding-top:2px}
+  #goal b{color:var(--lamp);font-weight:600}
+  #goal i{font-style:normal;color:var(--teal)}
+  #stage{flex:1}
+  /* ---- home ---- */
+  .act{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:12px 14px;margin-bottom:9px;cursor:pointer}
+  .act .an{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+  .act .at{font-size:15px;padding-top:2px}
+  .act .at b{color:var(--lamp);font-weight:600}
+  .act .stars{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.2em;color:var(--lamp);padding-top:4px}
+  .act .stars span{color:var(--mute)}
+  .act.lock{opacity:.42}
+  .act.done{border-color:rgba(63,209,165,.4)}
+  .act.done .an{color:var(--teal)}
+  .hrow{display:flex;gap:8px;margin-bottom:9px}
+  .hrow .act{flex:1;margin-bottom:0}
+  #prog{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--mute);padding:2px 4px 10px}
+  #prog b{color:var(--lamp)}
+  /* ---- panels ---- */
+  .panel{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px 12px;margin-bottom:8px}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+  .cap{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.05em;color:var(--mute);
+    text-transform:uppercase;padding:7px 4px;line-height:1.5;min-height:17px}
+  .cap b{font-weight:600;color:var(--lamp)}
+  .cap i{font-style:normal;color:var(--rose)}
+  .cap u{color:var(--teal);text-decoration:none}
+  .inspect{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;line-height:1.8;color:var(--ink);
+    border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:9px 12px;margin-bottom:8px}
+  .inspect b{color:var(--lamp);font-weight:600}
+  .inspect .dim{color:var(--mute)}
+  .inspect .up{color:var(--teal)} .inspect .dn{color:var(--rose)}
+  .out{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;line-height:1.8;color:var(--ink);
+    border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:9px 12px;margin-bottom:8px;
+    word-break:break-all;min-height:44px}
+  .out u{color:var(--lamp);text-decoration-color:rgba(240,184,90,.6);text-underline-offset:3px}
+  .out .cur{color:var(--lamp);animation:bl 1s step-end infinite}
+  @keyframes bl{50%{opacity:0}}
+  /* ---- sentence + keys (act 1) ---- */
+  .sent{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:16px;line-height:1.7;letter-spacing:.02em;
+    border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px;min-height:72px;word-break:break-all;margin-bottom:8px}
+  .sent .pre{color:var(--mute)} .sent .hit{color:var(--teal)} .sent .miss{color:var(--rose)}
+  .sent .cur{color:var(--lamp);animation:bl 1s step-end infinite}
+  .keys{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding-top:2px}
+  .keys button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:16px;min-height:44px;border-radius:10px;cursor:pointer;padding:0}
+  .keys button:active{transform:scale(.94)}
+  .keys button.good{border-color:var(--teal);color:var(--teal)}
+  .keys button.bad{border-color:var(--rose);color:var(--rose)}
+  .keys button.pick{border-color:var(--lamp);color:var(--lamp)}
+  /* ---- bets bar ---- */
+  .bets{margin-bottom:8px}
+  .bet{display:grid;grid-template-columns:22px 1fr 44px;align-items:center;gap:8px;margin:3px 0}
+  .bet .g{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:14px;text-align:center;color:var(--ink)}
+  .bet .g.truth{color:var(--teal)}
+  .bet .bar{height:10px;border:1px solid var(--line);border-radius:5px;overflow:hidden;position:relative}
+  .bet .fill{position:absolute;left:0;top:0;bottom:0;background:var(--lamp);opacity:.85}
+  .bet.truth .fill{background:var(--teal)}
+  .bet .v{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;color:var(--mute);text-align:right}
+  /* ---- ladder ---- */
+  .lad{display:grid;grid-template-columns:112px 1fr 44px;align-items:center;gap:8px;margin:4px 0}
+  .lad .n{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+  .lad .n.me{color:var(--lamp)}
+  .lad .bar{height:9px;border:1px solid var(--line);border-radius:5px;overflow:hidden;position:relative}
+  .lad .fill{position:absolute;left:0;top:0;bottom:0;background:var(--mute);opacity:.8}
+  .lad.best .fill{background:var(--teal)}
+  .lad .v{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;color:var(--ink);text-align:right}
+  /* ---- tiles ---- */
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+  .tile{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:9px 11px}
+  .tile .tv{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;color:var(--ink)}
+  .tile .tv b{color:var(--lamp);font-weight:600}
+  .tile .tv i{font-style:normal;color:var(--rose)}
+  .tile .tv u{color:var(--teal);text-decoration:none}
+  .tile .tk{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);padding-top:3px}
+  /* ---- canvases ---- */
+  canvas.viz{width:100%;border:1px solid var(--line);border-radius:12px;display:block;margin-bottom:8px;touch-action:none}
+  /* ---- focus strip ---- */
+  .fstrip{display:flex;flex-wrap:wrap;gap:2px;border:1px solid var(--line);border-radius:12px;background:var(--panel);
+    padding:10px;margin-bottom:8px}
+  .fcell{position:relative;width:20px;height:30px;border-radius:5px;display:flex;align-items:center;justify-content:center;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:14px;color:var(--ink);cursor:pointer}
+  .fcell .u{position:absolute;inset:0;border-radius:5px;background:var(--teal)}
+  .fcell span{position:relative}
+  .fcell.peak{outline:1px solid var(--teal)}
+  .fcell.qpos{outline:1px solid var(--lamp)}
+  /* ---- chips ---- */
+  .chips{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:8px}
+  .chips button{flex:none;background:var(--panel);border:1px solid var(--line);color:var(--mute);
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    padding:8px 10px;border-radius:10px;cursor:pointer;min-height:34px}
+  .chips button.on{color:var(--lamp);border-color:rgba(240,184,90,.6)}
+  .chips button.good{color:var(--teal);border-color:rgba(63,209,165,.55)}
+  /* ---- schematic ---- */
+  .schem .part{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px 12px;margin-bottom:4px;cursor:pointer}
+  .schem .part .pn{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--lamp)}
+  .schem .part .pd{font-size:12px;color:var(--mute);padding-top:2px;line-height:1.45}
+  .schem .part.seen .pn{color:var(--teal)}
+  .schem .arrow{text-align:center;color:var(--mute);font-size:11px;padding:1px 0 5px}
+  /* ---- boss ---- */
+  .dots{display:flex;gap:7px;justify-content:center;padding:2px 0 10px}
+  .dot{width:9px;height:9px;border-radius:50%;border:1px solid var(--line);background:transparent}
+  .dot.on{background:var(--lamp);border-color:var(--lamp)}
+  .dot.win{background:var(--teal);border-color:var(--teal)}
+  .dot.lose{background:var(--rose);border-color:var(--rose)}
+  .q{font-size:14px;line-height:1.55;padding:0 4px 10px}
+  .q b{color:var(--lamp)}
+  .opts{display:flex;flex-direction:column;gap:7px;margin-bottom:8px}
+  .opts button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);text-align:left;
+    font:inherit;font-size:13px;line-height:1.45;padding:11px 13px;border-radius:12px;cursor:pointer;min-height:44px}
+  .opts button.win{border-color:var(--teal);color:var(--teal)}
+  .opts button.lose{border-color:var(--rose);color:var(--rose)}
+  .verdict{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.05em;line-height:1.6;
+    text-transform:uppercase;color:var(--ink);border:1px solid var(--line);border-radius:12px;background:var(--panel);
+    padding:9px 12px;margin-bottom:8px}
+  .verdict b{color:var(--teal)} .verdict i{font-style:normal;color:var(--rose)}
+  /* ---- codex ---- */
+  .cx{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px 12px;margin-bottom:7px}
+  .cx.lock{opacity:.38}
+  .cx .ct{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--lamp)}
+  .cx .ct span{color:var(--mute);text-transform:none;letter-spacing:.02em}
+  .cx .cb{font-size:13px;line-height:1.5;color:var(--ink);padding-top:4px}
+  .cx .cg{font-size:12px;line-height:1.45;color:var(--mute);padding-top:4px}
+  .cx .cg b{color:var(--blue);font-weight:600}
+  .cx .cbr{font-size:12px;line-height:1.45;color:var(--mute);padding-top:4px}
+  .cx .cbr b{color:var(--violet);font-weight:600}
+  /* ---- controls ---- */
+  .sliders{padding:6px 10px 4px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:8px}
+  .sliders:empty{display:none}
+  .slider{display:grid;grid-template-columns:118px 1fr 48px;align-items:center;gap:10px;
+    font-size:11.5px;color:var(--mute);letter-spacing:.04em;text-transform:uppercase;margin:1px 0}
+  .slider output{text-align:right;color:var(--ink);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px}
+  input[type=range]{width:100%;accent-color:var(--lamp);height:26px;margin:0;background:transparent}
+  .row{display:flex;gap:7px;padding-bottom:8px}
+  .row button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    font:inherit;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    padding:12px 6px;border-radius:12px;flex:1;min-height:44px;cursor:pointer}
+  .row button:active{transform:scale(.97)}
+  .row button.primary{background:var(--lamp);color:#1c1304;border-color:var(--lamp);font-weight:700}
+  .row button.on{border-color:rgba(240,184,90,.7);color:var(--lamp)}
+  .row button.goodb{border-color:rgba(63,209,165,.55);color:var(--teal)}
+  .row button[disabled]{opacity:.4}
+  /* ---- trainer ---- */
+  .trainbar{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);
+    padding:9px 12px;margin-bottom:8px}
+  .trainbar .tt{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);flex:1}
+  .trainbar .tt b{color:var(--lamp)}
+  .trainbar button{background:none;border:1px solid var(--line);color:var(--rose);border-radius:9px;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:7px 10px;cursor:pointer}
+  /* ---- toast + info ---- */
+  #toast{position:fixed;left:50%;top:28%;transform:translateX(-50%);max-width:86vw;text-align:center;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink);background:rgba(12,13,19,.92);border:1px solid var(--line);border-radius:10px;padding:10px 14px;
+    opacity:0;transition:opacity .35s;pointer-events:none;line-height:1.7;z-index:8}
+  #toast b{color:var(--lamp)}
+  .starfx{color:var(--lamp)}
+  .foot{display:flex;gap:7px;padding-top:4px}
+  .foot button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--mute);
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    padding:12px 6px;border-radius:12px;flex:1;min-height:44px;cursor:pointer}
+  .foot button.next{color:var(--lamp);border-color:rgba(240,184,90,.6)}
+  .bookBox{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:8px;overflow:hidden}
+  .bookHead{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--mute);padding:9px 12px;cursor:pointer}
+  .bookHead b{color:var(--lamp);font-weight:600}
+  .bookText{display:none;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;letter-spacing:.05em;line-height:1.7;
+    color:var(--mute);padding:0 12px 10px;max-height:170px;overflow-y:auto;word-break:break-all}
+  .bookText.on{display:block}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="t" id="homeT"><b>the language machine</b> <span>· from zero to the table</span></div>
+    <div class="hbtns">
+      <button id="codexBtn">codex</button>
+      <button id="homeBtn">map</button>
+    </div>
+  </div>
+  <div id="stage"></div>
+</div>
+<div id="toast"></div>
+<script>
+(() => {
+// The Language Machine — engine. All real: explicit forward/backward, Adam, counters, BPE.
+// Developed standalone; inlined into language-machine.html verbatim below the BOOKS section.
+'use strict';
+
+// ================= vocab =================
+const VOCAB='abcdefghijklmnopqrstuvwxyz .';
+const NV=VOCAB.length;
+const IDX={}; [...VOCAB].forEach((c,i)=>IDX[c]=i);
+const UNIFORM_SURPRISE=Math.log(NV);
+
+// ================= rng =================
+const rngOf=s=>()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+function gauss(rng){let u=0,v=0;while(u===0)u=rng();while(v===0)v=rng();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+// ================= books =================
+const BASE_BOOK=('the cat sat on the mat. the dog sat on the log. the cat saw the dog and ran. '
++'the dog ran to the cat. the sun was hot and the mat was warm. a cat can sit and a dog can run. '
++'the man had a hat and a map. the man ran to the van. the rat sat on the map. '
++'the cat saw the rat and the rat hid. the dog dug and dug in the sand. the man got the map and the hat. '
++'the sun set and the sky was red. the cat and the dog sat on the mat. the rat ran to the log. '
++'a man and a dog met a cat. the cat hid in the hat. the dog got wet in the rain. '
++'the rain hit the tin roof. the man lit the lamp. the lamp was dim but warm. '
++'the cat naps on the warm mat. the dog naps by the door. the moon rose and the fog came. '
++'the fog hid the moon. the cat sang to the moon. the dog dug by the log. '
++'the man met the men at the mill. the men had hats and maps. the cat sat and the sun set. '
++'a bird sat in the tree. the bird saw a worm in the mud. the worm hid under a leaf. '
++'the fish swam in the pond. the man had a boat on the lake. the boat hit a rock and the man swam. '
++'the crow sat on the barn. the crow took the corn and flew to the nest. the nest had one egg. '
++'the wind blew and the tree bent. the snow fell on the hill. the road to the barn was wet. '
++'the star shone over the lake. the man made a fire by the rock. the fire was warm and red. '
++'the moss grew on the log. the path led to the pond. the dog ran down the path. '
++'the cat sat by the fire. the man fed the dog and the cat. the dog naps and the cat naps. '
++'the bird flew over the hill. the crow saw the fish jump. the fish hid under the boat. '
++'the rain fell on the pond. the pond rose and the path got wet. the man ran home on the wet road. '
++'home was warm and the lamp was lit. the cat met the man at the door. the dog got a bone. '
++'the bone was big and the dog was glad. the cat got milk in a cup. the milk was warm. '
++'the moon shone on the snow. the snow hid the path. the man made a map of the path. '
++'the map led the men to the mill. the mill ran on the wind. the wind blew all day. '
++'a fox ran by the barn. the crow saw the fox and flew up. the fox hid in the corn. '
++'the dog saw the fox and ran. the fox ran up the hill and was gone. the dog came home to the fire. '
++'the egg in the nest broke and a bird came out. the bird grew all summer. summer was hot and long. '
++'the leaf fell in the pond. the fish ate the worm. the worm was gone. '
++'the man cut wood by the barn. the wood fed the fire all winter. winter was cold and the snow was deep. '
++'the cat slept and the dog slept. the fire sank low. the moon set and the sun rose. '
++'the day was new and the sky was blue. the man went to the pond with the dog. the dog swam and the man sat. '
++'a frog sat on a log in the pond. the frog saw the fly and the fly was gone. the fish saw the frog jump. '
++'the cat sat in the sun by the door. the sun made the cat warm and slow. the cat slept till the moon rose. '
++'the men made hay in the sun. the hay was dry and the barn was full. the rat hid in the hay. '
++'the crow flew over the road to the mill. the mill made meal from the corn. the man took the meal home. '
++'home had a fire and a lamp and a mat. the cat had the mat and the dog had the door. all was calm. '
++'the wind blew the leaf off the tree. the leaf flew over the pond and fell on the path. the dog got the leaf. '
++'the fox came back by the barn at dusk. the dog was in and did not see the fox. the fox took an egg and ran. '
++'the crow saw the fox take the egg. the crow flew to the barn and made a din. the man ran out with the lamp. '
++'the fox was gone up the hill. the man shut the barn door. the hens were safe in the barn. '
++'a hen sat on the nest all day. the hen kept the egg warm. the egg was safe under the hen. '
++'the boat sat on the sand by the lake. the man made the boat wet and set out. the lake was flat and calm. '
++'the fish swam under the boat all day. the man got one fish by dusk. the man took the fish home to the fire. '
++'the cat saw the fish and sat up. the man fed the cat and the cat sang. the dog got the bone and all was well. '
++'the snow came at dusk and fell all night. the road and the path were deep in snow. the barn roof was white. '
++'the man dug the path out in the sun. the dog dug too and the snow flew. the cat sat in and kept warm. '
++'spring came and the snow ran off the hill. the pond rose and the frog sang all night. the tree got new leafs. '
++'the bird came back to the nest in the tree. the worm came up in the wet mud. the bird fed all day. '
++'the man set corn in rows by the barn. the rain fell soft on the rows. the corn grew tall all summer. '
++'the crow sat on a post and saw the corn. the man made a straw man with a hat. the crow let the corn be. '
++'the dog ran in the rows and the rat ran out. the cat got the rat by the barn. the man gave the cat milk. '
++'fall came and the leafs went red and gold. the wind took the leafs off the tree. the path was deep in leafs. '
++'the man swept the path to the door. the cat sat on the step in the low sun. the dog slept by the door. '
++'the men came to cut the corn. the corn went to the mill on the van. the mill ran all day on the wind. '
++'the barn was full for the cold days. the wood was cut and set by the door. the lamp had oil and the fire had wood. '
++'the long night came and the stars shone. the moon lit the snow on the hill. the fox barked far off on the hill. '
++'the dog put up an ear but slept on. the cat did not stir by the fire. the man shut the lamp and slept. '
++'the sun rose late and set soon. the days grew long bit by bit. the frog slept deep in the mud till spring.');
+
+// held-out pages: every 6th sentence goes to VAL, never trained on
+function splitBook(){
+  const sents=BASE_BOOK.split('. ');
+  const tr=[],va=[];
+  sents.forEach((s,i)=>{ (i%6===5?va:tr).push(s); });
+  const j=a=>a.join('. ')+(a.length?'.':'');
+  return {train:j(tr), val:j(va)};
+}
+const SPLIT=splitBook();
+
+// echo drills: "say ab. <filler> ab. " — the filler length varies, so the pair sits at a
+// DIFFERENT distance each time. a fixed-slot machine cannot lock on; content lookup can.
+// train pairs and never-seen test pairs are disjoint.
+const DRILL_FILL=['go','now','then','well','so','ok','right','hm','and'];
+function makeDrills(){
+  const rng=rngOf(913);
+  const L='abcdefghijklmnopqrstuvwxyz';
+  const all=[];
+  for(const a of L) for(const b of L) if(a!==b) all.push(a+b);
+  for(let i=all.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));const t=all[i];all[i]=all[j];all[j]=t;}
+  const test=all.slice(0,24), train=all.slice(24,224);
+  let txt='';
+  for(let i=0;i<420;i++){
+    const p=train[Math.floor(rng()*train.length)];
+    const f=DRILL_FILL[Math.floor(rng()*DRILL_FILL.length)];
+    txt+='say '+p+'. '+f+' '+p+'. ';
+  }
+  return {text:txt.trim(), trainPairs:train, testPairs:test};
+}
+const DRILLS=makeDrills();
+// scoring prompt for one pair with a chosen filler
+function drillPrompt(pair,filler){ return 'say '+pair+'. '+filler+' '; }
+
+// question book for fine-tuning: ask. ... tell. ...
+const QA_BOOK=('ask. where is the cat. tell. the cat is on the mat. '
++'ask. where is the dog. tell. the dog is by the door. '
++'ask. where is the rat. tell. the rat is on the map. '
++'ask. where is the bird. tell. the bird is in the tree. '
++'ask. where is the fish. tell. the fish is in the pond. '
++'ask. where is the crow. tell. the crow is on the barn. '
++'ask. where is the fox. tell. the fox is in the corn. '
++'ask. where is the man. tell. the man is at the mill. '
++'ask. where is the boat. tell. the boat is on the lake. '
++'ask. where is the egg. tell. the egg is in the nest. '
++'ask. where is the worm. tell. the worm is under the leaf. '
++'ask. where is the moss. tell. the moss is on the log. '
++'ask. what is warm. tell. the fire is warm. '
++'ask. what is cold. tell. the snow is cold. '
++'ask. what is wet. tell. the rain is wet. '
++'ask. what is hot. tell. the sun is hot. '
++'ask. what is dim. tell. the lamp is dim. '
++'ask. what is deep. tell. the snow is deep. '
++'ask. who ran home. tell. the man ran home. '
++'ask. who dug the sand. tell. the dog dug the sand. '
++'ask. who took the corn. tell. the crow took the corn. '
++'ask. who ate the worm. tell. the fish ate the worm. '
++'ask. who sang to the moon. tell. the cat sang to the moon. '
++'ask. who hid in the hat. tell. the cat hid in the hat. '
++'ask. who cut the wood. tell. the man cut the wood. '
++'ask. who saw the fox. tell. the dog saw the fox.').trim();
+
+// ================= counters (act 2) =================
+function countTable(text,n){
+  const m=new Map();
+  for(let i=n;i<text.length;i++){
+    const ctx=text.slice(i-n,i);
+    let row=m.get(ctx); if(!row){row=new Float64Array(NV);m.set(ctx,row);}
+    row[IDX[text[i]]]++;
+  }
+  return m;
+}
+function rowTotal(row){let t=0;for(let i=0;i<NV;i++)t+=row[i];return t;}
+// counter surprise on text, with a pinch of doubt so it never bets zero
+function counterSurprise(table,n,text,alpha){
+  alpha=alpha==null?0.1:alpha;
+  let s=0,c=0;
+  for(let i=n;i<text.length;i++){
+    const row=table.get(text.slice(i-n,i));
+    const cnt=row?row[IDX[text[i]]]:0;
+    const tot=row?rowTotal(row):0;
+    s+=-Math.log((cnt+alpha)/(tot+alpha*NV)); c++;
+  }
+  return s/c;
+}
+
+// ================= tensors & params =================
+function makeParams(){ return {list:[],t:0}; }
+function param(P,name,rows,cols,scale,rng){
+  const n=rows*cols, data=new Float64Array(n), grad=new Float64Array(n);
+  if(scale>0) for(let i=0;i<n;i++) data[i]=gauss(rng)*scale;
+  const p={name,rows,cols,data,grad,m:new Float64Array(n),v:new Float64Array(n)};
+  P.list.push(p); return p;
+}
+function zeroGrads(P){ for(const p of P.list) p.grad.fill(0); }
+function gradNorm(P){ let s=0; for(const p of P.list) for(let i=0;i<p.grad.length;i++) s+=p.grad[i]*p.grad[i]; return Math.sqrt(s); }
+function adamStep(P,lr,noClip){
+  P.t++;
+  const b1=0.9,b2=0.999,eps=1e-8;
+  const clip=1.0, gn=gradNorm(P), sc=(noClip||gn<=clip)?1:clip/gn;
+  const c1=1-Math.pow(b1,P.t), c2=1-Math.pow(b2,P.t);
+  for(const p of P.list){
+    for(let i=0;i<p.data.length;i++){
+      const g=p.grad[i]*sc;
+      p.m[i]=b1*p.m[i]+(1-b1)*g;
+      p.v[i]=b2*p.v[i]+(1-b2)*g*g;
+      p.data[i]-=lr*(p.m[i]/c1)/(Math.sqrt(p.v[i]/c2)+eps);
+    }
+  }
+  return gn;
+}
+function paramCount(P){ let n=0; for(const p of P.list) n+=p.data.length; return n; }
+
+// ================= the machine (decoder-only transformer) =================
+// cfg: {D, H, L, T} — width, heads, layers, context. usePos:false ablates position vectors.
+function makeLM(cfg,seed){
+  const rng=rngOf(seed);
+  const P=makeParams();
+  const D=cfg.D,H=cfg.H,L=cfg.L,T=cfg.T;
+  const M={cfg,P,seed,
+    wte:param(P,'wte',NV,D,0.08,rng),
+    wpe:param(P,'wpe',T,D,0.08,rng),
+    blocks:[],
+    gf:param(P,'gf',1,D,0,rng),
+    head:param(P,'head',D,NV,0.08,rng)};
+  M.gf.data.fill(1);
+  for(let l=0;l<L;l++){
+    const b={
+      g1:param(P,'g1_'+l,1,D,0,rng),
+      wq:param(P,'wq_'+l,D,D,0.08,rng), wk:param(P,'wk_'+l,D,D,0.08,rng),
+      wv:param(P,'wv_'+l,D,D,0.08,rng), wo:param(P,'wo_'+l,D,D,0.08,rng),
+      g2:param(P,'g2_'+l,1,D,0,rng),
+      w1:param(P,'w1_'+l,D,4*D,0.08,rng), b1:param(P,'b1_'+l,1,4*D,0,rng),
+      w2:param(P,'w2_'+l,4*D,D,0.08,rng), b2:param(P,'b2_'+l,1,D,0,rng)};
+    b.g1.data.fill(1); b.g2.data.fill(1);
+    M.blocks.push(b);
+  }
+  return M;
+}
+
+// leveler (rms norm): y_i = g_i * x_i / rms(x)
+function levelFwd(x,g,D){ // x: Float64Array [N,D] flat, returns {y, r[N]}
+  const N=x.length/D, y=new Float64Array(x.length), r=new Float64Array(N);
+  for(let n=0;n<N;n++){
+    let s=0; const o=n*D;
+    for(let i=0;i<D;i++) s+=x[o+i]*x[o+i];
+    const rm=Math.sqrt(s/D+1e-8); r[n]=rm;
+    for(let i=0;i<D;i++) y[o+i]=g[i]*x[o+i]/rm;
+  }
+  return {y,r};
+}
+function levelBwd(dy,x,g,r,D,dg){ // returns dx; accumulates dg
+  const N=x.length/D, dx=new Float64Array(x.length);
+  for(let n=0;n<N;n++){
+    const o=n*D, rm=r[n];
+    let dot=0;
+    for(let i=0;i<D;i++){ dot+=dy[o+i]*g[i]*x[o+i]; dg[i]+=dy[o+i]*x[o+i]/rm; }
+    for(let i=0;i<D;i++) dx[o+i]=dy[o+i]*g[i]/rm - x[o+i]*dot/(D*rm*rm*rm);
+  }
+  return dx;
+}
+// y[N,C] = x[N,K]·w[K,C] (+b[C])
+function matmulFwd(x,w,b,N,K,C){
+  const y=new Float64Array(N*C);
+  for(let n=0;n<N;n++){
+    const xo=n*K, yo=n*C;
+    for(let k=0;k<K;k++){
+      const xv=x[xo+k]; if(xv===0) continue;
+      const wo=k*C;
+      for(let c=0;c<C;c++) y[yo+c]+=xv*w[wo+c];
+    }
+    if(b) for(let c=0;c<C;c++) y[yo+c]+=b[c];
+  }
+  return y;
+}
+function matmulBwd(dy,x,w,N,K,C,dw,db){ // returns dx; accumulates dw, db
+  const dx=new Float64Array(N*K);
+  for(let n=0;n<N;n++){
+    const xo=n*K, yo=n*C;
+    for(let k=0;k<K;k++){
+      const wo=k*C; let s=0;
+      for(let c=0;c<C;c++){ s+=dy[yo+c]*w[wo+c]; dw[wo+c]+=x[xo+k]*dy[yo+c]; }
+      dx[xo+k]=s;
+    }
+    if(db) for(let c=0;c<C;c++) db[c]+=dy[yo+c];
+  }
+  return dx;
+}
+
+// forward+backward for one batch. idx: Int array [B][T], targets same shape shifted by caller.
+// returns {loss, probs (last position of sample 0 if wanted), att: [L][H][T][T] of sample 0}
+function lmForward(M,ix,iy,wantAtt){
+  const {D,H,L,T}=M.cfg, B=ix.length, N=B*T, hd=D/H, sc=1/Math.sqrt(hd);
+  const A={ix,iy,B,N};
+  // embed
+  let x=new Float64Array(N*D);
+  for(let b=0;b<B;b++) for(let t=0;t<T;t++){
+    const o=(b*T+t)*D, eo=ix[b][t]*D, po=t*D;
+    for(let i=0;i<D;i++) x[o+i]=M.wte.data[eo+i]+(M.cfg.usePos===false?0:M.wpe.data[po+i]);
+  }
+  A.x0=x; A.layers=[];
+  if(wantAtt) A.att=[];
+  for(let l=0;l<L;l++){
+    const b=M.blocks[l], C={};
+    C.xin=x;
+    const l1=levelFwd(x,b.g1.data,D); C.l1=l1;
+    C.q=matmulFwd(l1.y,b.wq.data,null,N,D,D);
+    C.k=matmulFwd(l1.y,b.wk.data,null,N,D,D);
+    C.v=matmulFwd(l1.y,b.wv.data,null,N,D,D);
+    // attention per batch, head
+    const att=new Float64Array(B*H*T*T);
+    const mix=new Float64Array(N*D);
+    for(let bb=0;bb<B;bb++){
+      for(let h=0;h<H;h++){
+        const ho=h*hd;
+        for(let t=0;t<T;t++){
+          const qo=(bb*T+t)*D+ho, ao=((bb*H+h)*T+t)*T;
+          let mx=-1e30;
+          for(let u=0;u<=t;u++){
+            const ko=(bb*T+u)*D+ho; let s=0;
+            for(let i=0;i<hd;i++) s+=C.q[qo+i]*C.k[ko+i];
+            s*=sc; att[ao+u]=s; if(s>mx)mx=s;
+          }
+          let Z=0;
+          for(let u=0;u<=t;u++){ const e=Math.exp(att[ao+u]-mx); att[ao+u]=e; Z+=e; }
+          for(let u=0;u<=t;u++) att[ao+u]/=Z;
+          const mo=(bb*T+t)*D+ho;
+          for(let u=0;u<=t;u++){
+            const vo=(bb*T+u)*D+ho, a=att[ao+u];
+            for(let i=0;i<hd;i++) mix[mo+i]+=a*C.v[vo+i];
+          }
+        }
+      }
+    }
+    C.att=att; C.mix=mix;
+    if(wantAtt){
+      const per=[];
+      for(let h=0;h<H;h++){
+        const rows=[];
+        for(let t=0;t<T;t++){ const ao=((0*H+h)*T+t)*T; rows.push(Array.from(att.slice(ao,ao+T))); }
+        per.push(rows);
+      }
+      A.att.push(per);
+    }
+    C.proj=matmulFwd(mix,b.wo.data,null,N,D,D);
+    const x2=new Float64Array(N*D);
+    for(let i=0;i<x.length;i++) x2[i]=x[i]+C.proj[i];
+    C.x2=x2;
+    const l2=levelFwd(x2,b.g2.data,D); C.l2=l2;
+    C.h1=matmulFwd(l2.y,b.w1.data,b.b1.data,N,D,4*D);
+    C.h1r=new Float64Array(C.h1.length);
+    for(let i=0;i<C.h1.length;i++) C.h1r[i]=C.h1[i]>0?C.h1[i]:0;
+    C.mo=matmulFwd(C.h1r,b.w2.data,b.b2.data,N,4*D,D);
+    const x3=new Float64Array(N*D);
+    for(let i=0;i<x.length;i++) x3[i]=x2[i]+C.mo[i];
+    x=x3; A.layers.push(C);
+  }
+  const lf=levelFwd(x,M.gf.data,D); A.lf=lf; A.xout=x;
+  const logits=matmulFwd(lf.y,M.head.data,null,N,D,NV);
+  // softmax + CE
+  const probs=new Float64Array(N*NV);
+  let loss=0;
+  for(let n=0;n<N;n++){
+    const o=n*NV; let mx=-1e30;
+    for(let c=0;c<NV;c++) if(logits[o+c]>mx)mx=logits[o+c];
+    let Z=0;
+    for(let c=0;c<NV;c++){ const e=Math.exp(logits[o+c]-mx); probs[o+c]=e; Z+=e; }
+    for(let c=0;c<NV;c++) probs[o+c]/=Z;
+    const b=Math.floor(n/T), t=n%T;
+    loss+=-Math.log(Math.max(1e-12,probs[o+iy[b][t]]));
+  }
+  loss/=N;
+  A.probs=probs; A.loss=loss;
+  return A;
+}
+function lmBackward(M,A){
+  const {D,H,L,T}=M.cfg, B=A.B, N=A.N, hd=D/H, sc=1/Math.sqrt(hd);
+  // dlogits
+  const dlog=new Float64Array(N*NV);
+  for(let n=0;n<N;n++){
+    const o=n*NV, b=Math.floor(n/T), t=n%T;
+    for(let c=0;c<NV;c++) dlog[o+c]=A.probs[o+c]/N;
+    dlog[o+A.iy[b][t]]-=1/N;
+  }
+  let dx=matmulBwd(dlog,A.lf.y,M.head.data,N,D,NV,M.head.grad,null);
+  dx=levelBwd(dx,A.xout,M.gf.data,A.lf.r,D,M.gf.grad);
+  for(let l=L-1;l>=0;l--){
+    const b=M.blocks[l], C=A.layers[l];
+    // x3 = x2 + mlp(l2(x2)); dx applies to both
+    const dmo=dx;
+    const dh1r=matmulBwd(dmo,C.h1r,b.w2.data,N,4*D,D,b.w2.grad,b.b2.grad);
+    for(let i=0;i<dh1r.length;i++) if(C.h1[i]<=0) dh1r[i]=0;
+    let dl2=matmulBwd(dh1r,C.l2.y,b.w1.data,N,D,4*D,b.w1.grad,b.b1.grad);
+    const dx2a=levelBwd(dl2,C.x2,b.g2.data,C.l2.r,D,b.g2.grad);
+    const dx2=new Float64Array(N*D);
+    for(let i=0;i<dx2.length;i++) dx2[i]=dx[i]+dx2a[i];
+    // x2 = xin + proj(mix)
+    const dproj=dx2;
+    const dmix=matmulBwd(dproj,C.mix,b.wo.data,N,D,D,b.wo.grad,null);
+    // attention backward
+    const dq=new Float64Array(N*D), dk=new Float64Array(N*D), dv=new Float64Array(N*D);
+    for(let bb=0;bb<B;bb++){
+      for(let h=0;h<H;h++){
+        const ho=h*hd;
+        for(let t=0;t<T;t++){
+          const ao=((bb*H+h)*T+t)*T, mo=(bb*T+t)*D+ho;
+          // da[u] = dmix·v ; dv += a*dmix
+          let dotSum=0;
+          const da=new Float64Array(t+1);
+          for(let u=0;u<=t;u++){
+            const vo=(bb*T+u)*D+ho; let s=0;
+            for(let i=0;i<hd;i++){ s+=dmix[mo+i]*C.v[vo+i]; dv[vo+i]+=C.att[ao+u]*dmix[mo+i]; }
+            da[u]=s; dotSum+=C.att[ao+u]*s;
+          }
+          const qo=(bb*T+t)*D+ho;
+          for(let u=0;u<=t;u++){
+            const ds=C.att[ao+u]*(da[u]-dotSum)*sc;
+            const ko=(bb*T+u)*D+ho;
+            for(let i=0;i<hd;i++){ dq[qo+i]+=ds*C.k[ko+i]; dk[ko+i]+=ds*C.q[qo+i]; }
+          }
+        }
+      }
+    }
+    const dl1a=matmulBwd(dq,C.l1.y,b.wq.data,N,D,D,b.wq.grad,null);
+    const dl1b=matmulBwd(dk,C.l1.y,b.wk.data,N,D,D,b.wk.grad,null);
+    const dl1c=matmulBwd(dv,C.l1.y,b.wv.data,N,D,D,b.wv.grad,null);
+    const dl1=new Float64Array(N*D);
+    for(let i=0;i<dl1.length;i++) dl1[i]=dl1a[i]+dl1b[i]+dl1c[i];
+    const dxina=levelBwd(dl1,C.xin,b.g1.data,C.l1.r,D,b.g1.grad);
+    dx=new Float64Array(N*D);
+    for(let i=0;i<dx.length;i++) dx[i]=dx2[i]+dxina[i];
+  }
+  // embeddings
+  for(let bb=0;bb<B;bb++) for(let t=0;t<T;t++){
+    const o=(bb*T+t)*D, eo=A.ix[bb][t]*D, po=t*D;
+    for(let i=0;i<D;i++){
+      M.wte.grad[eo+i]+=dx[o+i];
+      if(M.cfg.usePos!==false) M.wpe.grad[po+i]+=dx[o+i];
+    }
+  }
+  return A.loss;
+}
+
+// one training step on text with seeded batch draw
+function lmStep(M,text,B,lr,rng,noClip){
+  const T=M.cfg.T;
+  const ix=[],iy=[];
+  for(let b=0;b<B;b++){
+    const i0=Math.floor(rng()*(text.length-T-1));
+    const xr=new Array(T), yr=new Array(T);
+    for(let t=0;t<T;t++){ xr[t]=IDX[text[i0+t]]; yr[t]=IDX[text[i0+t+1]]; }
+    ix.push(xr); iy.push(yr);
+  }
+  zeroGrads(M.P);
+  const A=lmForward(M,ix,iy,false);
+  lmBackward(M,A);
+  adamStep(M.P,lr,noClip);
+  return A.loss;
+}
+
+// average surprise of the machine on a whole text (windows of T, stride T)
+function lmSurprise(M,text){
+  const T=M.cfg.T; let s=0,c=0;
+  for(let i0=0;i0+T+1<=text.length;i0+=T){
+    const xr=new Array(T), yr=new Array(T);
+    for(let t=0;t<T;t++){ xr[t]=IDX[text[i0+t]]; yr[t]=IDX[text[i0+t+1]]; }
+    const A=lmForward(M,[xr],[yr],false);
+    s+=A.loss*T; c+=T;
+  }
+  return c?s/c:NaN;
+}
+
+// bets for the char after a prompt (uses last min(T,len) chars)
+function lmBets(M,prompt){
+  const T=M.cfg.T;
+  const p=prompt.slice(-T);
+  const t0=p.length-1;
+  const xr=new Array(p.length), yr=new Array(p.length);
+  for(let t=0;t<p.length;t++){ xr[t]=IDX[p[t]]; yr[t]=0; }
+  // pad to T by repeating from start offset zero — instead run with actual length via temp cfg? keep T fixed: left-pad with spaces
+  while(xr.length<T){ xr.unshift(IDX[' ']); yr.unshift(0); }
+  const A=lmForward(M,[xr],[yr],false);
+  const o=(T-1)*NV;
+  return Array.from(A.probs.slice(o,o+NV));
+}
+function reshapeBets(bets,temp,topSlice){
+  let w=bets.map(x=>x>0?Math.pow(x,1/temp):0);
+  let s=w.reduce((a,x)=>a+x,0);
+  if(s<=0) return bets.slice();
+  w=w.map(x=>x/s);
+  if(topSlice<1){
+    const ord=w.map((x,i)=>[x,i]).sort((a,b)=>b[0]-a[0]);
+    const keep=new Set(); let acc=0;
+    for(const [x,i] of ord){ keep.add(i); acc+=x; if(acc>=topSlice) break; }
+    w=w.map((x,i)=>keep.has(i)?x:0);
+    const s2=w.reduce((a,x)=>a+x,0);
+    w=w.map(x=>x/s2);
+  }
+  return w;
+}
+function lmSample(M,prompt,steps,temp,topSlice,rng,greedy){
+  let out=prompt;
+  const tl=[];
+  for(let s=0;s<steps;s++){
+    const bets=lmBets(M,out);
+    let ci;
+    if(greedy){ ci=0; for(let i=1;i<NV;i++) if(bets[i]>bets[ci]) ci=i; }
+    else{
+      const sh=reshapeBets(bets,temp,topSlice==null?1:topSlice);
+      let r=rng(),a=0; ci=NV-1;
+      for(let i=0;i<NV;i++){ a+=sh[i]; if(r<a){ci=i;break;} }
+    }
+    tl.push({bets,pick:ci});
+    out+=VOCAB[ci];
+  }
+  return {text:out.slice(prompt.length), timeline:tl};
+}
+
+// detect a repeating cycle in greedy output
+function findLoop(s){
+  for(let per=1;per<=40;per++){
+    for(let i=0;i+3*per<=s.length;i++){
+      const a=s.slice(i,i+per);
+      if(a===s.slice(i+per,i+2*per)&&a===s.slice(i+2*per,i+3*per)) return {at:i,period:per,unit:a};
+    }
+  }
+  return null;
+}
+
+// ================= simpler machines for acts 3–4 =================
+// neural bigram: one letter in → bets out (a table reborn as dials)
+function makeBigramNet(seed){
+  const rng=rngOf(seed), P=makeParams();
+  return {P,W:param(P,'W',NV,NV,0.05,rng),b:param(P,'b',1,NV,0,rng)};
+}
+function bigramStep(M,text,B,lr,rng){
+  zeroGrads(M.P);
+  let loss=0;
+  for(let n=0;n<B;n++){
+    const i=1+Math.floor(rng()*(text.length-1));
+    const a=IDX[text[i-1]], y=IDX[text[i]];
+    const o=a*NV, logits=new Float64Array(NV);
+    for(let c=0;c<NV;c++) logits[c]=M.W.data[o+c]+M.b.data[c];
+    let mx=-1e30; for(let c=0;c<NV;c++) if(logits[c]>mx)mx=logits[c];
+    let Z=0; const pr=new Float64Array(NV);
+    for(let c=0;c<NV;c++){pr[c]=Math.exp(logits[c]-mx);Z+=pr[c];}
+    for(let c=0;c<NV;c++)pr[c]/=Z;
+    loss+=-Math.log(Math.max(1e-12,pr[y]));
+    for(let c=0;c<NV;c++){ const d=(pr[c]-(c===y?1:0))/B; M.W.grad[o+c]+=d; M.b.grad[c]+=d; }
+  }
+  adamStep(M.P,lr);
+  return loss/B;
+}
+function bigramSurprise(M,text){
+  let s=0,c=0;
+  for(let i=1;i<text.length;i++){
+    const a=IDX[text[i-1]], y=IDX[text[i]], o=a*NV;
+    let mx=-1e30; for(let k=0;k<NV;k++){const l=M.W.data[o+k]+M.b.data[k]; if(l>mx)mx=l;}
+    let Z=0,py=0;
+    for(let k=0;k<NV;k++){const e=Math.exp(M.W.data[o+k]+M.b.data[k]-mx);Z+=e;if(k===y)py=e;}
+    s+=-Math.log(Math.max(1e-12,py/Z)); c++;
+  }
+  return s/c;
+}
+// bottleneck: letter → vector(d) → bets. the squeeze that makes vectors mean something
+function makeBottleneck(d,seed){
+  const rng=rngOf(seed), P=makeParams();
+  return {P,d,E:param(P,'E',NV,d,0.15,rng),U:param(P,'U',d,NV,0.15,rng),b:param(P,'b',1,NV,0,rng)};
+}
+function bottleneckStep(M,text,B,lr,rng){
+  zeroGrads(M.P);
+  const d=M.d; let loss=0;
+  for(let n=0;n<B;n++){
+    const i=1+Math.floor(rng()*(text.length-1));
+    const a=IDX[text[i-1]], y=IDX[text[i]], eo=a*d;
+    const logits=new Float64Array(NV);
+    for(let c=0;c<NV;c++){ let s=M.b.data[c]; for(let k=0;k<d;k++) s+=M.E.data[eo+k]*M.U.data[k*NV+c]; logits[c]=s; }
+    let mx=-1e30; for(let c=0;c<NV;c++) if(logits[c]>mx)mx=logits[c];
+    let Z=0; const pr=new Float64Array(NV);
+    for(let c=0;c<NV;c++){pr[c]=Math.exp(logits[c]-mx);Z+=pr[c];}
+    for(let c=0;c<NV;c++)pr[c]/=Z;
+    loss+=-Math.log(Math.max(1e-12,pr[y]));
+    for(let c=0;c<NV;c++){
+      const dl=(pr[c]-(c===y?1:0))/B;
+      M.b.grad[c]+=dl;
+      for(let k=0;k<d;k++){ M.U.grad[k*NV+c]+=M.E.data[eo+k]*dl; M.E.grad[eo+k]+=M.U.data[k*NV+c]*dl; }
+    }
+  }
+  adamStep(M.P,lr);
+  return loss/B;
+}
+function bottleneckSurprise(M,text){
+  const d=M.d; let s=0,c=0;
+  for(let i=1;i<text.length;i++){
+    const a=IDX[text[i-1]], y=IDX[text[i]], eo=a*d;
+    const logits=new Float64Array(NV);
+    for(let k=0;k<NV;k++){ let v=M.b.data[k]; for(let j=0;j<d;j++) v+=M.E.data[eo+j]*M.U.data[j*NV+k]; logits[k]=v; }
+    let mx=-1e30; for(let k=0;k<NV;k++) if(logits[k]>mx)mx=logits[k];
+    let Z=0,py=0;
+    for(let k=0;k<NV;k++){const e=Math.exp(logits[k]-mx);Z+=e;if(k===y)py=e;}
+    s+=-Math.log(Math.max(1e-12,py/Z)); c++;
+  }
+  return s/c;
+}
+// window machine: last W letters, each as a small vector, through a think step
+function makeWindow(W,d,hid,seed){
+  const rng=rngOf(seed), P=makeParams();
+  return {P,W,d,hid,E:param(P,'E',NV,d,0.1,rng),
+    W1:param(P,'W1',W*d,hid,0.1,rng),B1:param(P,'B1',1,hid,0,rng),
+    W2:param(P,'W2',hid,NV,0.1,rng),B2:param(P,'B2',1,NV,0,rng)};
+}
+function windowForward(M,ctxIdx){ // ctxIdx: [W]
+  const {W,d,hid}=M;
+  const x=new Float64Array(W*d);
+  for(let t=0;t<W;t++){ const eo=ctxIdx[t]*d; for(let k=0;k<d;k++) x[t*d+k]=M.E.data[eo+k]; }
+  const h=new Float64Array(hid);
+  for(let j=0;j<hid;j++){ let s=M.B1.data[j]; for(let i=0;i<W*d;i++) s+=x[i]*M.W1.data[i*hid+j]; h[j]=s>0?s:0; }
+  const logits=new Float64Array(NV);
+  for(let c=0;c<NV;c++){ let s=M.B2.data[c]; for(let j=0;j<hid;j++) s+=h[j]*M.W2.data[j*NV+c]; logits[c]=s; }
+  let mx=-1e30; for(let c=0;c<NV;c++) if(logits[c]>mx)mx=logits[c];
+  let Z=0; const pr=new Float64Array(NV);
+  for(let c=0;c<NV;c++){pr[c]=Math.exp(logits[c]-mx);Z+=pr[c];}
+  for(let c=0;c<NV;c++)pr[c]/=Z;
+  return {x,h,pr};
+}
+function windowStep(M,text,B,lr,rng){
+  zeroGrads(M.P);
+  const {W,d,hid}=M; let loss=0;
+  for(let n=0;n<B;n++){
+    const i=W+Math.floor(rng()*(text.length-W));
+    const ctx=[]; for(let t=0;t<W;t++) ctx.push(IDX[text[i-W+t]]);
+    const y=IDX[text[i]];
+    const F=windowForward(M,ctx);
+    loss+=-Math.log(Math.max(1e-12,F.pr[y]));
+    const dlog=new Float64Array(NV);
+    for(let c=0;c<NV;c++) dlog[c]=(F.pr[c]-(c===y?1:0))/B;
+    const dh=new Float64Array(hid);
+    for(let c=0;c<NV;c++){ M.B2.grad[c]+=dlog[c];
+      for(let j=0;j<hid;j++){ M.W2.grad[j*NV+c]+=F.h[j]*dlog[c]; dh[j]+=M.W2.data[j*NV+c]*dlog[c]; } }
+    for(let j=0;j<hid;j++) if(F.h[j]<=0) dh[j]=0;
+    const dxv=new Float64Array(W*d);
+    for(let j=0;j<hid;j++){ if(dh[j]===0) continue; M.B1.grad[j]+=dh[j];
+      for(let i2=0;i2<W*d;i2++){ M.W1.grad[i2*hid+j]+=F.x[i2]*dh[j]; dxv[i2]+=M.W1.data[i2*hid+j]*dh[j]; } }
+    for(let t=0;t<W;t++){ const eo=ctx[t]*d; for(let k=0;k<d;k++) M.E.grad[eo+k]+=dxv[t*d+k]; }
+  }
+  adamStep(M.P,lr);
+  return loss/B;
+}
+function windowSurprise(M,text){
+  const W=M.W; let s=0,c=0;
+  for(let i=W;i<text.length;i++){
+    const ctx=[]; for(let t=0;t<W;t++) ctx.push(IDX[text[i-W+t]]);
+    s+=-Math.log(Math.max(1e-12,windowForward(M,ctx).pr[IDX[text[i]]])); c++;
+  }
+  return s/c;
+}
+function windowBets(M,prompt){
+  const W=M.W; let p=prompt.slice(-W);
+  while(p.length<W) p=' '+p;
+  const ctx=[]; for(let t=0;t<W;t++) ctx.push(IDX[p[t]]);
+  return Array.from(windowForward(M,ctx).pr);
+}
+
+// echo drill scoring: prompt "say ab. <filler> " → predict "a" then "b", over several fillers
+function echoScore(betsFn,pairs,fillers){
+  fillers=fillers||['go','then','right'];
+  let hit=0, tot=0;
+  for(const p of pairs){
+    for(const f of fillers){
+      const pre=drillPrompt(p,f);
+      const b1=betsFn(pre);
+      if(b1.indexOf(Math.max(...b1))===IDX[p[0]]) hit++;
+      tot++;
+      const b2=betsFn(pre+p[0]);
+      if(b2.indexOf(Math.max(...b2))===IDX[p[1]]) hit++;
+      tot++;
+    }
+  }
+  return hit/tot;
+}
+
+// ================= BPE (act 8) =================
+function bpeInit(text){
+  const words=text.split(/[ ]+/).filter(Boolean);
+  const freq=new Map();
+  for(const w of words) freq.set(w,(freq.get(w)||0)+1);
+  const seqs=[];
+  freq.forEach((f,w)=>seqs.push({parts:[...w],f}));
+  return {seqs,merges:[]};
+}
+function bpePairCounts(st){
+  const pc=new Map();
+  for(const s of st.seqs){
+    for(let i=0;i<s.parts.length-1;i++){
+      const k=s.parts[i]+'\u0001'+s.parts[i+1];
+      pc.set(k,(pc.get(k)||0)+s.f);
+    }
+  }
+  return pc;
+}
+function bpeMergeStep(st){
+  const pc=bpePairCounts(st);
+  let bk=null,bv=-1;
+  pc.forEach((v,k)=>{ if(v>bv||(v===bv&&k<bk)){bv=v;bk=k;} });
+  if(!bk) return null;
+  const [a,b]=bk.split('\u0001'), ab=a+b;
+  for(const s of st.seqs){
+    const np=[];
+    for(let i=0;i<s.parts.length;i++){
+      if(i<s.parts.length-1&&s.parts[i]===a&&s.parts[i+1]===b){ np.push(ab); i++; }
+      else np.push(s.parts[i]);
+    }
+    s.parts=np;
+  }
+  st.merges.push({a,b,ab,count:bv});
+  return {a,b,ab,count:bv};
+}
+function bpePieceCount(st){
+  let n=0; for(const s of st.seqs) n+=s.parts.length*s.f;
+  return n;
+}
+
+// ================= embedding geometry =================
+function vecOf(M,ci){ const d=M.d||M.cfg.D, E=(M.E||M.wte).data, o=ci*d; return E.slice(o,o+d); }
+function dist(a,b){ let s=0; for(let i=0;i<a.length;i++){const d=a[i]-b[i];s+=d*d;} return Math.sqrt(s); }
+function nearest(M,ci,k){
+  const me=vecOf(M,ci);
+  const ds=[];
+  for(let j=0;j<NV;j++){ if(j===ci) continue; ds.push([dist(me,vecOf(M,j)),j]); }
+  ds.sort((a,b)=>a[0]-b[0]);
+  return ds.slice(0,k).map(x=>({c:VOCAB[x[1]],d:x[0]}));
+}
+function vowelClustering(M){
+  const vow=['a','e','i','o','u'].map(c=>IDX[c]);
+  const cons=[...'bcdfghjklmnpqrstvwz'].map(c=>IDX[c]);
+  let intra=0,ni=0,inter=0,nx=0;
+  for(let i=0;i<vow.length;i++)for(let j=i+1;j<vow.length;j++){intra+=dist(vecOf(M,vow[i]),vecOf(M,vow[j]));ni++;}
+  for(const v of vow)for(const c of cons){inter+=dist(vecOf(M,v),vecOf(M,c));nx++;}
+  return {intra:intra/ni,inter:inter/nx};
+}
+
+// per-head focus profile: how much each head looks at the previous letter vs itself vs far back
+function headProfile(M,text){
+  const T=M.cfg.T, L=M.cfg.L, H=M.cfg.H;
+  const p=text.slice(0,T+1);
+  const xr=[],yr=[];
+  for(let t=0;t<T;t++){xr.push(IDX[p[t]]);yr.push(IDX[p[t+1]]);}
+  const A=lmForward(M,[xr],[yr],true);
+  const prof=[];
+  for(let l=0;l<L;l++){
+    for(let h=0;h<H;h++){
+      let prev=0,self=0,far=0,c=0;
+      for(let t=2;t<T;t++){
+        prev+=A.att[l][h][t][t-1]; self+=A.att[l][h][t][t];
+        let f=0; for(let u=0;u<t-1;u++) f+=A.att[l][h][t][u];
+        far+=f; c++;
+      }
+      prof.push({layer:l,head:h,prev:prev/c,self:self/c,far:far/c});
+    }
+  }
+  return prof;
+}
+// where does the machine look while echoing? focus rows + raw ask·tag match scores
+function echoFocus(M,pair,filler){
+  const T=M.cfg.T, D=M.cfg.D, H=M.cfg.H, hd=D/H, sc=1/Math.sqrt(hd);
+  let p=drillPrompt(pair,filler);
+  const pad=T-p.length;
+  p=' '.repeat(Math.max(0,pad))+p.slice(-T);
+  const xr=[],yr=[];
+  for(let t=0;t<T;t++){xr.push(IDX[p[t]]);yr.push(0);}
+  const A=lmForward(M,[xr],[yr],true);
+  const rows=[];
+  for(let l=0;l<M.cfg.L;l++) for(let h=0;h<M.cfg.H;h++){
+    const C=A.layers[l], ho=h*hd, t=T-1, qo=t*D+ho;
+    const scores=new Array(T).fill(null);
+    for(let u=0;u<=t;u++){
+      const ko=u*D+ho; let s=0;
+      for(let i=0;i<hd;i++) s+=C.q[qo+i]*C.k[ko+i];
+      scores[u]=s*sc;
+    }
+    rows.push({layer:l,head:h,focus:A.att[l][h][t].slice(0,T),scores});
+  }
+  return {text:p,rows,pairAt:p.indexOf('say '+pair)+4};
+}
+// top-2 principal directions of the letter vectors (power iteration), for the scatter
+function pca2(M){
+  const d=M.d||M.cfg.D, E2=(M.E||M.wte).data;
+  const mean=new Float64Array(d);
+  for(let c=0;c<NV;c++) for(let k=0;k<d;k++) mean[k]+=E2[c*d+k]/NV;
+  const X=[];
+  for(let c=0;c<NV;c++){ const r=new Float64Array(d); for(let k=0;k<d;k++) r[k]=E2[c*d+k]-mean[k]; X.push(r); }
+  const mul=v=>{ const o=new Float64Array(d);
+    for(const r of X){ let s=0; for(let k=0;k<d;k++) s+=r[k]*v[k]; for(let k=0;k<d;k++) o[k]+=s*r[k]; }
+    return o; };
+  const norm=v=>{ let s=0; for(let k=0;k<d;k++) s+=v[k]*v[k]; s=Math.sqrt(s)||1; for(let k=0;k<d;k++) v[k]/=s; return v; };
+  const rng=rngOf(77);
+  let v1=norm(Float64Array.from({length:d},()=>gauss(rng)));
+  for(let i=0;i<40;i++) v1=norm(mul(v1));
+  let v2=norm(Float64Array.from({length:d},()=>gauss(rng)));
+  for(let i=0;i<40;i++){
+    v2=mul(v2);
+    let dp=0; for(let k=0;k<d;k++) dp+=v2[k]*v1[k];
+    for(let k=0;k<d;k++) v2[k]-=dp*v1[k];
+    v2=norm(v2);
+  }
+  const pts=[];
+  for(let c=0;c<NV;c++){
+    let a=0,b=0;
+    for(let k=0;k<d;k++){ a+=X[c][k]*v1[k]; b+=X[c][k]*v2[k]; }
+    pts.push({c:VOCAB[c],x:a,y2:b});
+  }
+  return pts;
+}
+// bets of the simpler machines, for scope views
+function bigramBets(M,ch){
+  const a=IDX[ch]??IDX[' '], o=a*NV, logits=new Float64Array(NV);
+  for(let c=0;c<NV;c++) logits[c]=M.W.data[o+c]+M.b.data[c];
+  let mx=-1e30; for(let c=0;c<NV;c++) if(logits[c]>mx)mx=logits[c];
+  let Z=0; const pr=new Float64Array(NV);
+  for(let c=0;c<NV;c++){pr[c]=Math.exp(logits[c]-mx);Z+=pr[c];}
+  for(let c=0;c<NV;c++)pr[c]/=Z;
+  return Array.from(pr);
+}
+function bottleneckBets(M,ch){
+  const d=M.d, a=IDX[ch]??IDX[' '], eo=a*d, logits=new Float64Array(NV);
+  for(let c=0;c<NV;c++){ let s=M.b.data[c]; for(let k=0;k<d;k++) s+=M.E.data[eo+k]*M.U.data[k*NV+c]; logits[c]=s; }
+  let mx=-1e30; for(let c=0;c<NV;c++) if(logits[c]>mx)mx=logits[c];
+  let Z=0; const pr=new Float64Array(NV);
+  for(let c=0;c<NV;c++){pr[c]=Math.exp(logits[c]-mx);Z+=pr[c];}
+  for(let c=0;c<NV;c++)pr[c]/=Z;
+  return Array.from(pr);
+}
+function counterBets(table,ctx,alpha){
+  alpha=alpha==null?0.1:alpha;
+  const row=table.get(ctx);
+  const pr=new Array(NV);
+  const tot=row?rowTotal(row):0;
+  for(let c=0;c<NV;c++) pr[c]=((row?row[c]:0)+alpha)/(tot+alpha*NV);
+  return pr;
+}
+// fraction of babbled words that are real book words (2+ letters)
+const BOOK_WORDS=new Set(BASE_BOOK.split(/[ .]+/).filter(Boolean));
+function wordRate(txt){
+  const ws=txt.split(/[ .]+/).filter(w=>w.length>=2);
+  if(!ws.length) return 0;
+  return ws.filter(w=>BOOK_WORDS.has(w)).length/ws.length;
+}
+// head specialization: mean attention pattern difference between heads (layer l)
+function headDivergence(M,text){
+  const T=M.cfg.T;
+  const p=text.slice(0,T+1);
+  const xr=[],yr=[];
+  for(let t=0;t<T;t++){xr.push(IDX[p[t]]);yr.push(IDX[p[t+1]]);}
+  const A=lmForward(M,[xr],[yr],true);
+  const L=M.cfg.L,H=M.cfg.H;
+  let dsum=0,dn=0;
+  for(let l=0;l<L;l++){
+    for(let h1=0;h1<H;h1++)for(let h2=h1+1;h2<H;h2++){
+      let d=0,c=0;
+      for(let t=1;t<T;t++)for(let u=0;u<=t;u++){ d+=Math.abs(A.att[l][h1][t][u]-A.att[l][h2][t][u]); c++; }
+      dsum+=d/c; dn++;
+    }
+  }
+  return dsum/dn;
+}
+
+// gradient check: central differences on a few entries of every tensor
+function gradCheck(makeModel,fwdbwd,eps){
+  eps=eps||1e-5;
+  const M=makeModel();
+  const rng=rngOf(31);
+  fwdbwd(M); // fills grads
+  let worst=0, worstName='';
+  for(const p of M.P.list){
+    for(let k=0;k<3;k++){
+      const i=Math.floor(rng()*p.data.length);
+      const g=p.grad[i];
+      const o=p.data[i];
+      p.data[i]=o+eps; const lp=fwdbwd(M,true);
+      p.data[i]=o-eps; const lm=fwdbwd(M,true);
+      p.data[i]=o;
+      const num=(lp-lm)/(2*eps);
+      const rel=Math.abs(num-g)/Math.max(1e-8,Math.abs(num)+Math.abs(g));
+      if(rel>worst){worst=rel;worstName=p.name+'['+i+']';}
+    }
+  }
+  return {worst,worstName};
+}
+
+if(typeof module!=='undefined') module.exports={VOCAB,NV,IDX,UNIFORM_SURPRISE,rngOf,gauss,
+  BASE_BOOK,SPLIT,DRILLS,QA_BOOK,DRILL_FILL,drillPrompt,countTable,rowTotal,counterSurprise,
+  makeParams,param,zeroGrads,adamStep,paramCount,
+  makeLM,lmForward,lmBackward,lmStep,lmSurprise,lmBets,lmSample,reshapeBets,findLoop,
+  makeBigramNet,bigramStep,bigramSurprise,makeBottleneck,bottleneckStep,bottleneckSurprise,
+  makeWindow,windowStep,windowSurprise,windowBets,windowForward,echoScore,
+  bpeInit,bpePairCounts,bpeMergeStep,bpePieceCount,
+  vecOf,dist,nearest,vowelClustering,headDivergence,headProfile,echoFocus,gradCheck,
+  pca2,bigramBets,bottleneckBets,counterBets,wordRate,BOOK_WORDS};
+// ===================== the game =====================
+const $=id=>document.getElementById(id);
+const GLYPH=c=>c===' '?'␣':c;
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const f2=x=>x.toFixed(2);
+const COLC={ink:'#e9e4d8',mute:'#8d8a80',lamp:'#f0b85a',teal:'#3fd1a5',rose:'#ff6e6e',blue:'#4fc1ff',violet:'#c98bff',bg:'#06070b'};
+
+// ---------- save ----------
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+let SAVE={v:1,stars:{},boss:{},ladder:{},notes:[],seen:{}};
+(function(){ try{ const s=JSON.parse(lsGet('machine-save')||'null'); if(s&&s.v===1) SAVE=s; }catch(e){} })();
+function save(){ lsSet('machine-save',JSON.stringify(SAVE)); }
+function bossesPassed(){ let n=0; while(SAVE.boss['b'+(n+1)]) n++; return n; }
+function unlockedAct(){ return Math.min(8,bossesPassed()+1); }
+function starCount(){ return Object.keys(SAVE.stars).length; }
+
+// ---------- toast ----------
+let toastT=null;
+function toast(msg,long){
+  const t=$('toast'); t.innerHTML=msg; t.style.opacity=1;
+  if(toastT) clearTimeout(toastT);
+  toastT=setTimeout(()=>{t.style.opacity=0;},long?4200:2600);
+}
+function award(id){
+  if(SAVE.stars[id]) return false;
+  SAVE.stars[id]=1; save();
+  toast('<span class="starfx">★</span> mission complete');
+  const f=document.querySelector('.foot button.nextTarget'); if(f) f.classList.add('next');
+  return true;
+}
+
+// ---------- models registry ----------
+const MODELS={};      // live models this session
+const SNAPS={};       // parameter snapshots (dip etc.)
+function snapParams(M){ return M.P.list.map(p=>p.data.slice()); }
+function restoreParams(M,snap){ M.P.list.forEach((p,i)=>p.data.set(snap[i])); }
+const COUNTERS={};
+function counter(n){ if(!COUNTERS[n]) COUNTERS[n]=countTable(SPLIT.train,n); return COUNTERS[n]; }
+
+// standard recipes (seeds match the verified measurements)
+const RECIPE={
+  bigram:{mk:()=>makeBigramNet(11),rngSeed:21,steps:1500,lr:0.05,B:32},
+  bneck:{mk:()=>makeBottleneck(8,5),rngSeed:105,steps:2500,lr:0.05,B:32},
+  winBook:{mk:()=>makeWindow(8,10,64,13),rngSeed:31,steps:1000,lr:0.01,B:24},
+  winDrill:{mk:()=>makeWindow(8,10,64,17),rngSeed:37,steps:5000,lr:0.01,B:24},
+  lmDrill:{mk:()=>makeLM({D:32,H:2,L:2,T:24},23),rngSeed:41,steps:2200,lr:0.01,B:12},
+  lmBook:{mk:()=>makeLM({D:32,H:2,L:2,T:32},29),rngSeed:43,steps:750,lr:0.01,B:12}
+};
+
+// ---------- trainer (rAF budget) ----------
+let TRAIN=null;
+function startTrain(cfg){
+  // cfg: {label, stepFn, total, onTick(done,loss), onEval(step)?, evalEvery?, after, stopWhen?}
+  if(TRAIN) return false;
+  TRAIN={cfg,count:0,loss:NaN,stop:false};
+  renderTrainbar();
+  const tick=()=>{
+    if(!TRAIN) return;
+    const t0=performance.now();
+    while(performance.now()-t0<26 && TRAIN.count<cfg.total && !TRAIN.stop){
+      TRAIN.loss=cfg.stepFn();
+      TRAIN.count++;
+      if(cfg.evalEvery && TRAIN.count%cfg.evalEvery===0){ cfg.onEval&&cfg.onEval(TRAIN.count); if(cfg.stopWhen&&cfg.stopWhen(TRAIN.count)) TRAIN.stop=true; }
+    }
+    if(cfg.onTick) cfg.onTick(TRAIN.count,TRAIN.loss);
+    renderTrainbar();
+    if(TRAIN.count>=cfg.total||TRAIN.stop){ const a=cfg.after; TRAIN=null; renderTrainbar(); a&&a(); return; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return true;
+}
+function runTrainSync(cfg){ // harness path: same contract, no rAF
+  let count=0,stop=false;
+  while(count<cfg.total&&!stop){
+    cfg.stepFn(); count++;
+    if(cfg.evalEvery&&count%cfg.evalEvery===0){ cfg.onEval&&cfg.onEval(count); if(cfg.stopWhen&&cfg.stopWhen(count)) stop=true; }
+  }
+  cfg.after&&cfg.after();
+  return count;
+}
+function renderTrainbar(){
+  const el=document.querySelector('.trainbar');
+  if(!el) return;
+  if(!TRAIN){ el.classList.add('hide'); return; }
+  el.classList.remove('hide');
+  el.querySelector('.tt').innerHTML=TRAIN.cfg.label+' · step <b>'+TRAIN.count+'</b>/'+TRAIN.cfg.total
+    +(isFinite(TRAIN.loss)?' · surprise <b>'+TRAIN.loss.toFixed(2)+'</b>':'');
+}
+
+// ---------- shared components ----------
+function keysHTML(){ let h='<div class="keys">'; for(let i=0;i<NV;i++) h+='<button data-k="'+i+'">'+GLYPH(VOCAB[i])+'</button>'; return h+'</div>'; }
+function betsBarHTML(bets,truthIdx,topN){
+  topN=topN||6;
+  const ord=bets.map((b,i)=>[b,i]).sort((a,b)=>b[0]-a[0]).slice(0,topN);
+  let h='<div class="bets">';
+  for(const [b,i] of ord){
+    const tr=i===truthIdx;
+    h+='<div class="bet'+(tr?' truth':'')+'"><div class="g'+(tr?' truth':'')+'">'+GLYPH(VOCAB[i])+'</div>'
+      +'<div class="bar"><div class="fill" style="width:'+(100*b).toFixed(1)+'%"></div></div>'
+      +'<div class="v">'+(100*b).toFixed(1)+'%</div></div>';
+  }
+  return h+'</div>';
+}
+function bookBoxHTML(id,label,text){
+  return '<div class="bookBox"><div class="bookHead" data-bb="'+id+'">'+label+' · <b>'+text.length+'</b> letters · tap to read</div>'
+    +'<div class="bookText" id="bb-'+id+'">'+esc(text)+'</div></div>';
+}
+function wireBookBoxes(el){
+  el.querySelectorAll('.bookHead').forEach(h=>h.addEventListener('pointerdown',()=>{
+    const t=$('bb-'+h.dataset.bb); if(t) t.classList.toggle('on');
+  }));
+}
+// the ladder: held-out surprise scoreboard (lower is better)
+const LADDER_DEF=[
+  {k:'uniform',n:'blind luck',fixed:3.33},
+  {k:'counter1',n:'counter · 1'},
+  {k:'counter3',n:'counter · 3'},
+  {k:'window',n:'the window'},
+  {k:'machine',n:'the machine',me:true}
+];
+function ladderHTML(){
+  const rows=[];
+  for(const d of LADDER_DEF){
+    const v=d.fixed!=null?d.fixed:SAVE.ladder[d.k];
+    if(v==null) continue;
+    rows.push({...d,v});
+  }
+  rows.sort((a,b)=>b.v-a.v);
+  const best=Math.min(...rows.map(r=>r.v));
+  let h='<div class="panel"><div class="cap" style="padding-top:0">the ladder · surprise on pages never studied · lower wins</div>';
+  for(const r of rows){
+    const w=Math.max(3,100*(3.5-r.v)/3.5);
+    h+='<div class="lad'+(r.v===best?' best':'')+'"><div class="n'+(r.me?' me':'')+'">'+r.n+'</div>'
+      +'<div class="bar"><div class="fill" style="width:'+w.toFixed(1)+'%"></div></div>'
+      +'<div class="v">'+f2(r.v)+'</div></div>';
+  }
+  return h+'</div>';
+}
+function setLadder(k,v){ if(SAVE.ladder[k]==null||v<SAVE.ladder[k]) SAVE.ladder[k]=+v.toFixed(3); save(); }
+
+// curves on canvas: series=[{pts:[[step,val]],color}], targets=[{y,label,color}]
+function drawCurves(cv,series,targets,opt){
+  opt=opt||{};
+  const dpr=window.devicePixelRatio||1;
+  const rect=cv.getBoundingClientRect();
+  const W=rect.width||350, H=opt.h||150;
+  cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+  cv.style.height=H+'px';
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
+  c.fillStyle=COLC.bg; c.fillRect(0,0,W,H);
+  let ymax=opt.ymax||0, xmax=1;
+  for(const s of series) for(const p of s.pts){ if(!opt.ymax&&p[1]>ymax&&isFinite(p[1])) ymax=p[1]; if(p[0]>xmax) xmax=p[0]; }
+  for(const t of targets||[]) if(!opt.ymax&&t.y>ymax) ymax=t.y;
+  ymax=Math.min(opt.ycap||6,Math.max(1e-6,ymax*1.08));
+  const X=x=>8+(W-16)*x/xmax, Y=y=>H-14-(H-26)*Math.min(1,y/ymax);
+  c.font='10px ui-monospace,Menlo,monospace'; c.textBaseline='middle';
+  for(const t of targets||[]){
+    c.strokeStyle=t.color; c.setLineDash([3,4]); c.beginPath();
+    c.moveTo(8,Y(t.y)); c.lineTo(W-8,Y(t.y)); c.stroke(); c.setLineDash([]);
+    c.fillStyle=t.color; c.textAlign='right'; c.fillText(t.label,W-10,Y(t.y)-7);
+  }
+  for(const s of series){
+    if(s.pts.length<1) continue;
+    c.strokeStyle=s.color; c.lineWidth=1.5; c.beginPath();
+    s.pts.forEach((p,i)=>{ const y=isFinite(p[1])?p[1]:ymax; if(i===0)c.moveTo(X(p[0]),Y(y)); else c.lineTo(X(p[0]),Y(y)); });
+    c.stroke();
+    const lp=s.pts[s.pts.length-1];
+    if(s.label){ c.fillStyle=s.color; c.textAlign='left'; c.fillText(s.label,10,14+(series.indexOf(s))*12); }
+  }
+  c.fillStyle=COLC.mute; c.textAlign='left';
+  c.fillText('0',8,H-6); c.textAlign='right'; c.fillText(String(xmax)+' steps',W-8,H-6);
+}
+// embedding scatter
+function drawScatter(cv,pts,opt){
+  opt=opt||{};
+  const dpr=window.devicePixelRatio||1;
+  const rect=cv.getBoundingClientRect();
+  const W=rect.width||350, H=opt.h||230;
+  cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+  cv.style.height=H+'px';
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
+  c.fillStyle=COLC.bg; c.fillRect(0,0,W,H);
+  let mx=1e-6;
+  for(const p of pts){ mx=Math.max(mx,Math.abs(p.x),Math.abs(p.y2)); }
+  const X=x=>W/2+(W/2-18)*x/mx, Y=y=>H/2+(H/2-18)*y/mx;
+  c.font='13px ui-monospace,Menlo,monospace'; c.textAlign='center'; c.textBaseline='middle';
+  const vow=new Set(['a','e','i','o','u']);
+  for(const p of pts){
+    const v=vow.has(p.c);
+    c.fillStyle=v?COLC.teal:(p.c===' '||p.c==='.'?COLC.mute:COLC.ink);
+    c.fillText(GLYPH(p.c),X(p.x),Y(p.y2));
+  }
+  c.fillStyle=COLC.mute; c.font='10px ui-monospace,Menlo,monospace'; c.textAlign='left';
+  c.fillText(opt.label||'letter vectors · flattened to the two widest directions',10,H-9);
+}
+// mini heatmap for the counter
+function drawHeat(cv){
+  const t=counter(1);
+  const dpr=window.devicePixelRatio||1;
+  const rect=cv.getBoundingClientRect();
+  const W=rect.width||350;
+  const off=14, cell=Math.max(8,Math.floor((W-off-4)/NV));
+  const H=off+cell*NV+4;
+  cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+  cv.style.height=H+'px';
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
+  c.fillStyle=COLC.bg; c.fillRect(0,0,W,H);
+  let mx=1; t.forEach(row=>{for(let i=0;i<NV;i++) if(row[i]>mx)mx=row[i];});
+  c.font='10px ui-monospace,Menlo,monospace'; c.textAlign='center'; c.textBaseline='middle';
+  for(let i=0;i<NV;i++){
+    c.fillStyle=COLC.mute;
+    c.fillText(GLYPH(VOCAB[i]),off+i*cell+cell/2,7);
+    c.fillText(GLYPH(VOCAB[i]),6,off+i*cell+cell/2);
+  }
+  for(let r=0;r<NV;r++){
+    const row=t.get(VOCAB[r]); if(!row) continue;
+    for(let cc=0;cc<NV;cc++){
+      if(row[cc]<=0) continue;
+      c.globalAlpha=0.12+0.88*Math.sqrt(row[cc]/mx);
+      c.fillStyle=COLC.lamp;
+      c.fillRect(off+cc*cell+1,off+r*cell+1,cell-2,cell-2);
+    }
+  }
+  c.globalAlpha=1;
+}
+
+// ---------- codex ----------
+const CODEX=[
+ {id:'bet',cast:'bet',pro:'probability',act:1,body:'The machine spreads 100% of belief over the 28 letters before every reveal. Nothing else comes out of it — every answer it will ever give is a stack of bets.',gpt:'GPT bets over ~100k pieces instead of 28 letters — same object, called a probability distribution.',brain:'Your brain bets ahead too: it pre-activates likely next words while you read. Surprise slows your reading by measurable milliseconds.'},
+ {id:'surprise',cast:'surprise',pro:'loss · cross-entropy',act:1,body:'Score = −ln(bet on the letter that actually came). Confidently right ≈ 0. Confidently wrong → huge. The whole of training is: lower this number.',gpt:'The exact formula GPT trains on, averaged over trillions of pieces. Papers call it loss, in nats or bits.',brain:'Dopamine circuits carry a close cousin: firing tracks reward minus expected reward — a live surprise signal that drives learning.'},
+ {id:'heldout',cast:'never-studied pages',pro:'validation set',act:2,body:'Pages kept locked away during study. Scoring there reveals whether the machine learned the language or memorized its book.',gpt:'Every serious lab holds out data the model never trains on. Scores on it decide everything.'},
+ {id:'ladder',cast:'the ladder',pro:'benchmark / eval',act:2,body:'One number per machine, on the same never-studied pages, lower wins. All model comparison works this way.',gpt:'Leaderboards, evals, benchmarks — dressed-up ladders.'},
+ {id:'memgap',cast:'the memorizing gap',pro:'overfitting',act:2,body:'Score brilliant on the own book, poor on new pages: the gap between the two is memorization. Growing gap = learning is over, copying has begun.',gpt:'Overfitting. The reason validation curves are watched like hawks.'},
+ {id:'dial',cast:'dial',pro:'parameter · weight',act:3,body:'One adjustable number inside the machine. Your machine has 27,872. Learning never edits rules — it only turns dials.',gpt:'GPT-class models: hundreds of billions of dials. Nothing qualitatively new — just more.'},
+ {id:'vote',cast:'vote',pro:'gradient',act:3,body:'After each surprise, every dial gets a vote: which direction, and how strongly, it should move to shrink that surprise. Computed exactly, not guessed.',gpt:'The gradient, computed by backpropagation — the chain rule doing bookkeeping at scale.',brain:'Real neurons cannot run backprop as such — how brains assign credit this precisely is an open research question.'},
+ {id:'nudge',cast:'the nudge recipe',pro:'gradient descent · adam',act:3,body:'Take the votes, move every dial a small step, repeat thousands of times. Nothing is ever solved — the machine settles, like a structure relaxing into its lowest energy.',gpt:'Adam — the same recipe with per-dial step sizing — trains essentially every large model today.'},
+ {id:'stepsize',cast:'step size',pro:'learning rate',act:3,body:'How far dials move per nudge. Too small: ages to settle. Too big: the machine thrashes, or melts outright.',gpt:'Learning rate — the single most-tuned number in deep learning.'},
+ {id:'vector',cast:'letter vector',pro:'embedding',act:3,body:'Each letter becomes a short list of learned numbers. Letters used alike drift together, so lessons about one transfer to its neighbors. Meaning becomes geometry.',gpt:'Word/token embeddings. Directions in that space carry meaning: the same shift takes king toward queen and man toward woman.',brain:'Concepts in cortex are population codes — patterns over many neurons, not one cell per idea. Nearby patterns behave alike.'},
+ {id:'window',cast:'the window',pro:'fixed context',act:4,body:'Read exactly the last 8 letters through fixed slots. Better than counting — but each slot is welded in place, so a clue that moves position is invisible.',gpt:'The failure that motivated attention. Fixed windows cannot follow content.'},
+ {id:'drill',cast:'the echo drill',pro:'copy task',act:4,body:'Say two letters, ask for them back after a variable gap. Trivial for you, impossible for fixed slots on pairs never drilled — the cleanest test of real look-back.',gpt:'Copy and induction tasks are standard probes of what a model class can even represent.'},
+ {id:'focus',cast:'focus · spotlight',pro:'attention',act:5,body:'Each position computes where to look — from content, not from a fixed slot. The wiring is rebuilt for every text, every step. That is the whole trick.',gpt:'Self-attention, the heart of the transformer. The paper is literally titled Attention Is All You Need.',brain:'Your cocktail-party trick: one voice among many, selected and amplified on the fly. Selection by relevance, not by position.'},
+ {id:'asktag',cast:'ask · tag · cargo',pro:'query · key · value',act:5,body:'Every position writes an ask (what am i looking for), a tag (what am i), and cargo (what i pass along). Focus = how well ask matches tag; what flows is the cargo.',gpt:'Query, key, value — three learned projections. The match is a dot product, exactly as in your machine.'},
+ {id:'head',cast:'head',pro:'attention head',act:5,body:'One spotlight. Your machine runs two per layer, and they specialize on their own: one learned to watch the letter behind, one learned to hunt the pair.',gpt:'Dozens of heads per layer. Interpretability research catalogs their roles — some heads in GPT do exactly what yours do.'},
+ {id:'induction',cast:'the echo circuit',pro:'induction head',act:5,body:'The two-layer team your machine discovered: a look-behind head feeds a hunt-the-pair head, and together they copy patterns never seen before. Nobody wired this — it emerged.',gpt:'Induction heads, found inside real LLMs, are believed central to in-context learning — the skill of picking up a pattern from your prompt alone.'},
+ {id:'think',cast:'think step',pro:'mlp block',act:6,body:'After looking, each position chews on what it gathered: dials, bends, dials again. Look, then think — that pair repeats.',gpt:'The feed-forward block — roughly two thirds of the dials in a big transformer.'},
+ {id:'skip',cast:'skip wire',pro:'residual connection',act:6,body:'Every part adds to a running signal instead of replacing it. Nothing learned is ever thrown away, and votes can flow backward through deep stacks without dying.',gpt:'Residual connections — the reason hundred-layer models can train at all.'},
+ {id:'leveler',cast:'leveler',pro:'layer norm',act:6,body:'Re-levels the signal between parts so nothing drowns anything out. Boring, essential.',gpt:'LayerNorm/RMSNorm. Every block has them.'},
+ {id:'posvec',cast:'position vectors',pro:'positional embedding',act:6,body:'The spotlight alone is order-blind — a bag of letters. Adding a learned vector per position gives the machine a sense of place. Flip them off and echo collapses, live.',gpt:'Positional encodings. Modern variants (RoPE) rotate instead of add — same job.'},
+ {id:'transformer',cast:'the machine',pro:'transformer',act:6,body:'Vectors in, look-then-think stacked twice, level, bet. That is the entire architecture of modern language models. Yours: 27,872 dials. Same blueprint at any size.',gpt:'A decoder-only transformer — the GPT in GPT.'},
+ {id:'dip',cast:'the dip',pro:'early stopping',act:6,body:'Train surprise falls forever; never-studied surprise falls, bottoms out, rises. Stop at the bottom. Knowing when to stop is a real, paid skill.',gpt:'Early stopping, checkpoint selection — watched on validation curves in every training run.'},
+ {id:'melt',cast:'meltdown',pro:'divergence',act:6,body:'Step size too big, guard rail off: surprise explodes and the dials are ruined. Real runs crash this way too.',gpt:'Loss divergence. Big labs babysit runs precisely to catch this.'},
+ {id:'sampling',cast:'babble settings',pro:'sampling · temperature · top-p',act:7,body:'temp reshapes the bets before drawing: cold sharpens toward the favorite, hot flattens toward noise. slice drops the long tail of tiny bets first.',gpt:'Temperature and top-p — the same two knobs on every LLM API. Now you know what they reshape.'},
+ {id:'parrot',cast:'the parrot',pro:'greedy loop',act:7,body:'Always take the top bet and the machine walks into a cycle and repeats it forever. Measured here with a loop detector, period and all.',gpt:'Greedy decoding degenerates the same way at scale — why nobody serves greedy raw.'},
+ {id:'inventor',cast:'the confident inventor',pro:'hallucination',act:7,body:'Off its book, the machine still bets fluently — it was built to always bet, never to say i do not know. Fluency is not knowledge.',gpt:'Hallucination. Mitigations exist — retrieval, tuning, uncertainty — but the root is the same betting nature.'},
+ {id:'pieces',cast:'pieces',pro:'tokens · bpe',act:8,body:'Merge the commonest adjacent pair, repeat: letters grow into pieces like the and ing. The book gets shorter as the piece list grows.',gpt:'Byte-pair encoding, ~100k pieces. Also why models miscount letters in a word — they never see letters, only pieces.'},
+ {id:'pretrain',cast:'school',pro:'pretraining',act:8,body:'The long next-letter apprenticeship on the whole book. Everything the machine knows, it learned here — as a side effect of betting well.',gpt:'Months, thousands of chips, trillions of pieces. Producing: a very good babbler.'},
+ {id:'finetune',cast:'job training',pro:'fine-tuning',act:8,body:'A short second school on a small ask-tell book turns the babbler into an answerer. Same nudges, new data, gentler steps.',gpt:'Instruction tuning — the step that turned raw GPT into a usable assistant.'},
+ {id:'rlhf',cast:'thumbs school',pro:'rlhf',act:8,body:'Beyond this toy: after job training, people rate answers and the model is nudged toward the liked ones. Preference becomes the teacher, not text.',gpt:'Reinforcement learning from human feedback — the third stage behind modern assistants.'},
+ {id:'scale',cast:'the only new ingredient',pro:'scaling laws',act:8,body:'Your machine to GPT: same bets, same surprise, same nudges, same blueprint. Multiply dials, book, and compute by billions and skills appear that nobody put in.',gpt:'Scaling laws: surprise falls predictably with size — abilities arrive unannounced along the way.'}
+];
+function codexScreen(){
+  const el=$('stage');
+  const ua=unlockedAct();
+  let h='<div id="goal">The codex: every cast name, paired with the word <b>professionals</b> use.'
+    +'<span class="sub">entries unlock as you earn them. blue lines: the same thing at gpt scale. violet: the brain cousin.</span></div>';
+  for(const c of CODEX){
+    const open=c.act<=ua;
+    SAVE.seen['cx-'+c.id]=open?1:SAVE.seen['cx-'+c.id];
+    h+='<div class="cx'+(open?'':' lock')+'">'
+      +'<div class="ct">'+c.cast+' <span>= '+(open?c.pro:'· · ·')+'</span></div>'
+      +(open?('<div class="cb">'+c.body+'</div>'
+        +(c.gpt?'<div class="cg"><b>at scale</b> · '+c.gpt+'</div>':'')
+        +(c.brain?'<div class="cbr"><b>brain cousin</b> · '+c.brain+'</div>':'')):'')
+      +'</div>';
+  }
+  h+='<div class="foot"><button data-go="home">back to the map</button></div>';
+  el.innerHTML=h; save();
+  wireNav(el);
+}
+function wireNav(el){
+  el.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('pointerdown',()=>{
+    const g=b.dataset.go;
+    if(g==='home') go('home');
+    else if(g==='codex') go('codex');
+    else if(g.startsWith('m')) go('mission',g);
+    else if(g.startsWith('b')) go('boss',+g.slice(1));
+  }));
+}
+// ---------- small model helpers used by missions ----------
+function rowShares(row,temp){
+  const w=new Float64Array(NV); let s=0;
+  for(let i=0;i<NV;i++){ w[i]=row[i]>0?Math.pow(row[i],1/temp):0; s+=w[i]; }
+  if(s>0) for(let i=0;i<NV;i++) w[i]/=s;
+  return w;
+}
+function counterBabble(n,len,temp,seed){
+  const rng=rngOf(seed);
+  const tabs={}; for(let k=1;k<=n;k++) tabs[k]=counter(k);
+  const i0=n+Math.floor(rng()*(SPLIT.train.length-n));
+  let ctx=SPLIT.train.slice(i0-n,i0), out='';
+  for(let s=0;s<len;s++){
+    let k=n,row=null;
+    while(k>=1){ row=tabs[k].get(ctx.slice(-k)); if(row) break; k--; }
+    if(!row) row=tabs[1].get('e');
+    const sh=rowShares(row,temp);
+    let r=rng(),a=0,ci=NV-1;
+    for(let i=0;i<NV;i++){ a+=sh[i]; if(r<a){ci=i;break;} }
+    out+=VOCAB[ci]; ctx=(ctx+VOCAB[ci]).slice(-n);
+  }
+  return out;
+}
+function longestCopyBase(out){
+  let best=0,bi=0;
+  for(let i=0;i<out.length;i++){
+    let l=best+1;
+    while(i+l<=out.length && BASE_BOOK.includes(out.slice(i,i+l))){ best=l; bi=i; l++; }
+  }
+  return {len:best,at:bi};
+}
+function windowBabble(M,len,temp,seed){
+  const rng=rngOf(seed);
+  let out='the ';
+  for(let s=0;s<len;s++){
+    const sh=reshapeBets(windowBets(M,out),temp,1);
+    let r=rng(),a=0,ci=NV-1;
+    for(let i=0;i<NV;i++){ a+=sh[i]; if(r<a){ci=i;break;} }
+    out+=VOCAB[ci];
+  }
+  return out.slice(4);
+}
+// hand-bet surprise: big 50%, side 25%, rest spread over the other 26
+function handBetSurprise(bigI,sideI,truthI){
+  let bet;
+  if(truthI===bigI) bet=0.5;
+  else if(truthI===sideI) bet=0.25;
+  else bet=0.25/26;
+  return -Math.log(bet);
+}
+// doctor cases for boss 6 — tiny live runs, real curves
+function runDoctor(kind){
+  const hist={train:[],val:[]};
+  if(kind==='melt'){
+    const M=makeLM({D:8,H:2,L:1,T:8},81), rng=rngOf(83);
+    for(let s=0;s<120;s++){
+      const l=lmStep(M,SPLIT.train,8,5,rng,true);
+      if(s%6===0) hist.train.push([s,Math.min(12,isFinite(l)?l:12)]);
+    }
+  }else if(kind==='timid'){
+    const M=makeLM({D:8,H:2,L:1,T:8},85), rng=rngOf(87);
+    for(let s=0;s<120;s++){
+      const l=lmStep(M,SPLIT.train,8,0.0002,rng);
+      if(s%6===0) hist.train.push([s,l]);
+    }
+  }else{ // memorize
+    const tiny=SPLIT.train.slice(0,150);
+    const M=makeLM({D:16,H:2,L:1,T:12},89), rng=rngOf(91);
+    for(let s=0;s<300;s++){
+      const l=lmStep(M,tiny,8,0.02,rng);
+      if(s%15===0){ hist.train.push([s,l]); hist.val.push([s,lmSurprise(M,SPLIT.val.slice(0,220))]); }
+    }
+  }
+  return hist;
+}
+
+// ---------- acts & missions ----------
+const ACTS=[
+  {n:1,title:'the bet',missions:['m11','m12']},
+  {n:2,title:'the counter',missions:['m21','m22']},
+  {n:3,title:'dials',missions:['m31','m32','m33']},
+  {n:4,title:'the window',missions:['m41','m42']},
+  {n:5,title:'the spotlight',missions:['m51','m52']},
+  {n:6,title:'the machine room',missions:['m61','m62','m63']},
+  {n:7,title:'the serving window',missions:['m71','m72','m73']},
+  {n:8,title:'to the giants',missions:['m81','m82','m83']}
+];
+const FIELD_NOTES=[
+ 'score a guess by minus ln of the bet placed on the truth.',
+ 'judge machines on pages they never studied.',
+ 'learning is dials nudged by votes. squeezed vectors organize into meaning.',
+ 'fixed slots cannot follow content. that is why windows fail.',
+ 'the spotlight computes its wiring per text. ask matches tag, cargo flows.',
+ 'watch both curves. stop at the dip. respect the step size.',
+ 'temp reshapes bets. greedy loops. fluency is not knowledge.',
+ 'same game at every scale. dials, votes, bets, surprise.'];
+
+const MISSIONS={};
+function defM(id,title,goal,render){ MISSIONS[id]={id,act:+id[1],title,goal,render}; }
+function missionChrome(m,inner){
+  const act=ACTS[m.act-1];
+  const idx=act.missions.indexOf(m.id);
+  const next=idx<act.missions.length-1?act.missions[idx+1]:null;
+  return '<div id="goal">'+m.goal+'</div>'
+    +'<div class="trainbar hide"><div class="tt"></div><button data-stop="1">stop</button></div>'
+    +inner
+    +'<div class="foot"><button data-go="home">map</button>'
+    +(next?'<button class="nextTarget'+(SAVE.stars[m.id]?' next':'')+'" data-go="'+next+'">next mission</button>'
+          :'<button class="nextTarget'+(SAVE.stars[m.id]?' next':'')+'" data-go="b'+m.act+'">the boss</button>')
+    +'</div>';
+}
+function wireChrome(el){
+  wireNav(el);
+  const st=el.querySelector('[data-stop]');
+  if(st) st.addEventListener('pointerdown',()=>{ if(TRAIN) TRAIN.stop=true; });
+}
+
+// ===== act 1 =====
+defM('m11','you are the machine',
+ 'You be the machine: read, then tap the letter you think comes <b>next</b>.<span class="sub">twelve guesses. every language machine ever built plays exactly this game.</span>',
+ el=>{
+  const sents=(()=>{ const raw=BASE_BOOK.split('. ').map(s=>s.trim().replace(/\.$/,'')).filter(s=>s.length>=18&&s.length<=44);
+    const rng=rngOf(5), a=raw.slice();
+    for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}
+    return a; })();
+  const G={si:0,sent:'',pos:0,right:0,total:0,streak:0,marks:[]};
+  const newSent=()=>{ G.sent=sents[G.si%sents.length]+'.'; G.si++; G.pos=4; G.marks=['pre','pre','pre','pre']; };
+  newSent();
+  el.innerHTML=missionChrome(MISSIONS.m11,
+    '<div class="sent" id="m11s"></div>'
+    +'<div class="cap" id="m11c"></div>'
+    +keysHTML());
+  const draw=()=>{
+    let h='';
+    for(let i=0;i<G.pos;i++) h+='<span class="'+G.marks[i]+'">'+GLYPH(G.sent[i])+'</span>';
+    h+='<span class="cur">▮</span>';
+    $('m11s').innerHTML=h;
+    $('m11c').innerHTML='right <b>'+G.right+'/'+G.total+'</b> · streak <b>'+G.streak+'</b> · blind luck would land 3.6%';
+  };
+  draw();
+  el.querySelector('.keys').addEventListener('pointerdown',e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    const truth=G.sent[G.pos], hit=VOCAB[+b.dataset.k]===truth;
+    G.marks.push(hit?'hit':'miss'); G.pos++; G.total++;
+    if(hit){G.right++;G.streak++;}else G.streak=0;
+    b.classList.add(hit?'good':'bad'); setTimeout(()=>{b.classList.remove('good');b.classList.remove('bad');},260);
+    if(G.pos>=G.sent.length) newSent();
+    if(G.total>=12&&!SAVE.stars.m11){ award('m11'); $('m11c').innerHTML='you beat blind luck by pure knowledge of english. <b>that skill is the whole subject.</b>'; }
+    draw();
+  });
+  wireChrome(el);
+ });
+
+defM('m12','bet like a machine',
+ 'Now bet like a machine: spread <b>bets</b> over letters, then face the truth.<span class="sub">surprise = −ln of your bet on the letter that came. confident and wrong hurts most.</span>',
+ el=>{
+  const rng=rngOf(407);
+  const spots=[];
+  for(let i=0;i<40;i++){ spots.push(30+Math.floor(rng()*(BASE_BOOK.length-40))); }
+  const S={r:0,total:0,big:null,side:null,log:[]};
+  el.innerHTML=missionChrome(MISSIONS.m12,
+    '<div class="sent" id="m12s"></div>'
+    +'<div class="cap" id="m12c"></div>'
+    +keysHTML()
+    +'<div class="row"><button class="primary" id="m12go" disabled>face the truth</button></div>'
+    +'<div class="inspect" id="m12log">round log appears here.<br><span class="dim">first tap = big bet 50% · second tap = side bet 25% · the rest share 25%</span></div>');
+  const ctxOf=()=>BASE_BOOK.slice(spots[S.r]-26,spots[S.r]);
+  const truthOf=()=>BASE_BOOK[spots[S.r]];
+  const draw=()=>{
+    $('m12s').innerHTML='<span class="pre">'+esc(ctxOf())+'</span><span class="cur">▮</span>';
+    $('m12c').innerHTML='round <b>'+(S.r+1)+'</b>/5 · total surprise <b>'+S.total.toFixed(2)+'</b>'
+      +(S.big!=null?' · big: <b>'+GLYPH(VOCAB[S.big])+'</b>':'')+(S.side!=null?' · side: <b>'+GLYPH(VOCAB[S.side])+'</b>':'');
+    el.querySelectorAll('.keys button').forEach(b=>{
+      b.classList.toggle('pick',+b.dataset.k===S.big||+b.dataset.k===S.side);
+    });
+    $('m12go').disabled=S.big==null||S.side==null;
+  };
+  draw();
+  el.querySelector('.keys').addEventListener('pointerdown',e=>{
+    const b=e.target.closest('button'); if(!b||S.r>=5) return;
+    const k=+b.dataset.k;
+    if(S.big==null) S.big=k;
+    else if(S.side==null&&k!==S.big) S.side=k;
+    else { S.big=k; S.side=null; }
+    draw();
+  });
+  $('m12go').addEventListener('pointerdown',()=>{
+    if(S.big==null||S.side==null||S.r>=5) return;
+    const truth=truthOf(), ti=IDX[truth];
+    const sp=handBetSurprise(S.big,S.side,ti);
+    S.total+=sp;
+    S.log.push('r'+(S.r+1)+' · truth <b>'+GLYPH(truth)+'</b> · your bet '+((ti===S.big)?'50%':(ti===S.side)?'25%':'0.96%')+' · surprise <b>'+sp.toFixed(2)+'</b>');
+    S.r++; S.big=null; S.side=null;
+    $('m12log').innerHTML=S.log.join('<br>')+(S.r>=5?'<br><span class="dim">blind luck would total '+(5*UNIFORM_SURPRISE).toFixed(1)+' · you: '+S.total.toFixed(1)+'</span>':'');
+    if(S.r>=5){ award('m12'); $('m12s').innerHTML='<span class="pre">done — the machine is scored exactly this way, letter after letter.</span>'; }
+    else draw();
+  });
+  wireChrome(el);
+ });
+
+// ===== act 2 =====
+defM('m21','the counter on the ladder',
+ 'A machine that counts pairs, babbles — and gets <b>scored</b> on pages it never saw.<span class="sub">the ladder starts here: blind luck scores 3.33. the counter must beat it.</span>',
+ el=>{
+  const c1tr=counterSurprise(counter(1),1,SPLIT.train), c1va=counterSurprise(counter(1),1,SPLIT.val);
+  setLadder('counter1',c1va);
+  el.innerHTML=missionChrome(MISSIONS.m21,
+    bookBoxHTML('m21','the book',BASE_BOOK)
+    +'<canvas class="viz" id="m21h"></canvas>'
+    +'<div class="tiles">'
+    +'<div class="tile"><div class="tv"><b>'+f2(c1tr)+'</b></div><div class="tk">surprise · its own book</div></div>'
+    +'<div class="tile"><div class="tv"><b>'+f2(c1va)+'</b></div><div class="tk">surprise · never-studied pages</div></div>'
+    +'</div>'
+    +ladderHTML()
+    +'<div class="out hide" id="m21o"></div>'
+    +'<div class="row"><button class="primary" id="m21b">babble from the counts</button></div>');
+  drawHeat($('m21h'));
+  $('m21b').addEventListener('pointerdown',()=>{
+    const txt=counterBabble(1,120,1,(Math.random()*1e9)|0);
+    const o=$('m21o'); o.classList.remove('hide'); o.textContent=txt;
+    award('m21');
+  });
+  wireChrome(el); wireBookBoxes(el);
+ });
+
+defM('m22','the memorizing gap',
+ 'Give the counter more memory and it starts <b>memorizing</b> instead of learning.<span class="sub">watch the gap between its own book and never-seen pages grow.</span>',
+ el=>{
+  let n=1;
+  el.innerHTML=missionChrome(MISSIONS.m22,
+    '<div class="chips" id="m22n"></div>'
+    +'<div class="tiles" id="m22t"></div>'
+    +'<div class="out hide" id="m22o"></div>'
+    +'<div class="cap" id="m22c"></div>'
+    +'<div class="row"><button class="primary" id="m22b">babble with context</button></div>');
+  const stat={};
+  const upd=()=>{
+    if(!stat[n]){
+      const tb=counter(n);
+      stat[n]={tr:counterSurprise(tb,n,SPLIT.train),va:counterSurprise(tb,n,SPLIT.val)};
+      if(n===3) setLadder('counter3',stat[3].va);
+    }
+    const s=stat[n], gap=s.va-s.tr;
+    $('m22n').innerHTML=[1,2,3,4].map(k=>'<button class="'+(k===n?'on':'')+'" data-n="'+k+'">context '+k+'</button>').join('');
+    $('m22t').innerHTML=
+      '<div class="tile"><div class="tv"><b>'+f2(s.tr)+'</b></div><div class="tk">own book</div></div>'
+      +'<div class="tile"><div class="tv"><b>'+f2(s.va)+'</b></div><div class="tk">never-studied pages</div></div>'
+      +'<div class="tile"><div class="tv"><i>'+f2(gap)+'</i></div><div class="tk">the memorizing gap</div></div>'
+      +'<div class="tile"><div class="tv"><b>'+counter(n).size+'</b> rows</div><div class="tk">table it needed</div></div>';
+    $('m22c').innerHTML=gap>0.3?'own-book score looks brilliant. the gap says: <i>it is quoting, not learning</i>.':'small gap so far — it still generalizes.';
+    el.querySelectorAll('#m22n button').forEach(b=>b.addEventListener('pointerdown',()=>{n=+b.dataset.n;upd();}));
+  };
+  upd();
+  $('m22b').addEventListener('pointerdown',()=>{
+    const txt=counterBabble(n,120,1,(Math.random()*1e9)|0);
+    const cp=longestCopyBase(txt);
+    const o=$('m22o'); o.classList.remove('hide');
+    o.innerHTML=esc(txt.slice(0,cp.at))+'<u>'+esc(txt.slice(cp.at,cp.at+cp.len))+'</u>'+esc(txt.slice(cp.at+cp.len));
+    $('m22c').innerHTML='longest straight quote from the book: <b>'+cp.len+'</b> letters'+(n>=3?' · <i>at high context it mostly quotes</i>':'');
+    if(n>=3) award('m22');
+  });
+  wireChrome(el);
+ });
+
+// ===== act 3 =====
+defM('m31','the table reborn as dials',
+ 'Dials learn by nudges what the counter got by <b>counting</b> — watch them converge.<span class="sub">same score, found a different way. that way will scale; counting will not.</span>',
+ el=>{
+  el.innerHTML=missionChrome(MISSIONS.m31,
+    '<canvas class="viz" id="m31c"></canvas>'
+    +'<div class="tiles" id="m31t"></div>'
+    +'<div class="row"><button class="primary" id="m31go">train the dials</button></div>');
+  const target=counterSurprise(counter(1),1,SPLIT.train,1e-9);
+  const hist=[];
+  const drawIt=()=>drawCurves($('m31c'),[{pts:hist,color:COLC.lamp,label:'dials · surprise on the book'}],
+    [{y:target,label:'the counter '+f2(target),color:COLC.teal}],{ycap:4});
+  drawIt();
+  const tiles=(now)=>{ $('m31t').innerHTML=
+    '<div class="tile"><div class="tv"><b>'+(now!=null?f2(now):'—')+'</b></div><div class="tk">dials · surprise now</div></div>'
+    +'<div class="tile"><div class="tv"><b>'+f2(target)+'</b></div><div class="tk">the counter got</div></div>'; };
+  tiles(null);
+  $('m31go').addEventListener('pointerdown',()=>{
+    if(TRAIN||MODELS.bigram) return;
+    const M=RECIPE.bigram.mk(), rng=rngOf(RECIPE.bigram.rngSeed);
+    MODELS.bigram=M;
+    startTrain({label:'nudging 812 dials',total:RECIPE.bigram.steps,
+      stepFn:()=>bigramStep(M,SPLIT.train,RECIPE.bigram.B,RECIPE.bigram.lr,rng),
+      evalEvery:100,
+      onEval:s=>{ const v=bigramSurprise(M,SPLIT.train); hist.push([s,v]); drawIt(); tiles(v); },
+      after:()=>{ const v=bigramSurprise(M,SPLIT.train);
+        tiles(v);
+        if(Math.abs(v-target)<0.12){ award('m31'); toast('the dials found the counter’s answer — <b>without a table</b>'); }
+      }});
+  });
+  wireChrome(el);
+ });
+
+defM('m32','the squeeze',
+ 'Squeeze letters through eight numbers and they are forced to <b>organize</b>.<span class="sub">letters used alike drift together. watch the vowels huddle, live.</span>',
+ el=>{
+  el.innerHTML=missionChrome(MISSIONS.m32,
+    '<canvas class="viz" id="m32c"></canvas>'
+    +'<div class="tiles" id="m32t"></div>'
+    +'<div class="row"><button class="primary" id="m32go">train the squeeze</button></div>');
+  const tiles=()=>{
+    const M=MODELS.bneck;
+    let h='';
+    if(M){ const c=vowelClustering(M);
+      h='<div class="tile"><div class="tv"><b>'+f2(c.intra)+'</b></div><div class="tk">vowel ↔ vowel spread</div></div>'
+       +'<div class="tile"><div class="tv"><b>'+f2(c.inter)+'</b></div><div class="tk">vowel ↔ consonant spread</div></div>';
+    }
+    $('m32t').innerHTML=h;
+  };
+  const drawIt=()=>{ if(MODELS.bneck) drawScatter($('m32c'),pca2(MODELS.bneck)); };
+  if(MODELS.bneck){ drawIt(); tiles(); }
+  $('m32go').addEventListener('pointerdown',()=>{
+    if(TRAIN) return;
+    const M=RECIPE.bneck.mk(), rng=rngOf(RECIPE.bneck.rngSeed);
+    MODELS.bneck=M;
+    startTrain({label:'squeezing 28 letters into 8 numbers',total:RECIPE.bneck.steps,
+      stepFn:()=>bottleneckStep(M,SPLIT.train,RECIPE.bneck.B,RECIPE.bneck.lr,rng),
+      evalEvery:120,onEval:()=>{ drawIt(); },
+      after:()=>{ drawIt(); tiles();
+        const c=vowelClustering(M);
+        if(c.inter/c.intra>1.2){ award('m32'); toast('vowels huddle: <b>'+f2(c.intra)+'</b> apart, vs <b>'+f2(c.inter)+'</b> from consonants'); }
+      }});
+  });
+  wireChrome(el);
+ });
+
+defM('m33','the vector scope',
+ 'The vector scope: tap letters, see their <b>neighbors</b> and their shared habits.<span class="sub">nearby vectors make nearby bets — that is why the machine can generalize.</span>',
+ el=>{
+  el.innerHTML=missionChrome(MISSIONS.m33,
+    '<div class="cap" id="m33c">tap a letter. needs the squeeze from the last mission.</div>'
+    +keysHTML()
+    +'<div class="inspect hide" id="m33i"></div>'
+    +'<div id="m33b"></div>');
+  let taps=0;
+  el.querySelector('.keys').addEventListener('pointerdown',e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    const M=MODELS.bneck;
+    if(!M){ toast('train the squeeze first — one mission back'); return; }
+    const ch=VOCAB[+b.dataset.k];
+    const nb=nearest(M,IDX[ch],3);
+    const I=$('m33i'); I.classList.remove('hide');
+    I.innerHTML='<b>'+GLYPH(ch)+'</b> lives nearest to '+nb.map(x=>'<b>'+GLYPH(x.c)+'</b> <span class="dim">('+f2(x.d)+' away)</span>').join(' · ');
+    const bets=bottleneckBets(M,ch);
+    $('m33b').innerHTML='<div class="cap">its bets after seeing '+GLYPH(ch)+'</div>'+betsBarHTML(bets,-1,5)
+      +'<div class="cap">and after its nearest neighbor '+GLYPH(nb[0].c)+'</div>'+betsBarHTML(bottleneckBets(M,nb[0].c),-1,5);
+    taps++;
+    if(taps>=3) award('m33');
+  });
+  wireChrome(el);
+ });
+
+// ===== act 4 =====
+defM('m41','eight slots of memory',
+ 'Eight letters of memory: the window machine reads more and <b>climbs</b> the ladder.<span class="sub">train it on the book. stop at the dip — the rest is memorizing.</span>',
+ el=>{
+  el.innerHTML=missionChrome(MISSIONS.m41,
+    '<canvas class="viz" id="m41c"></canvas>'
+    +'<div class="tiles" id="m41t"></div>'
+    +ladderHTML()
+    +'<div class="out hide" id="m41o"></div>'
+    +'<div class="row"><button class="primary" id="m41go">train the window</button><button id="m41b" disabled>babble</button></div>');
+  const trainPts=[],valPts=[]; let minVal=1e9;
+  const drawIt=()=>drawCurves($('m41c'),
+    [{pts:trainPts,color:COLC.lamp,label:'own book'},{pts:valPts,color:COLC.teal,label:'never-studied pages'}],
+    [{y:counterSurprise(counter(1),1,SPLIT.val),label:'counter·1',color:COLC.mute},
+     {y:counterSurprise(counter(3),3,SPLIT.val),label:'counter·3',color:COLC.mute}],{ycap:4});
+  drawIt();
+  $('m41go').addEventListener('pointerdown',()=>{
+    if(TRAIN||MODELS.winBook) return;
+    const M=RECIPE.winBook.mk(), rng=rngOf(RECIPE.winBook.rngSeed);
+    MODELS.winBook=M;
+    startTrain({label:'training the window',total:RECIPE.winBook.steps,
+      stepFn:()=>windowStep(M,SPLIT.train,RECIPE.winBook.B,RECIPE.winBook.lr,rng),
+      evalEvery:50,
+      onEval:s=>{ const tr=windowSurprise(M,SPLIT.train.slice(0,900)), va=windowSurprise(M,SPLIT.val);
+        trainPts.push([s,tr]); valPts.push([s,va]); if(va<minVal) minVal=va; drawIt(); },
+      after:()=>{
+        setLadder('window',minVal);
+        $('m41t').innerHTML='<div class="tile"><div class="tv"><b>'+f2(minVal)+'</b></div><div class="tk">its dip on new pages</div></div>'
+          +'<div class="tile"><div class="tv"><b>'+paramCount(MODELS.winBook.P)+'</b></div><div class="tk">dials</div></div>';
+        const lad=el.querySelector('.panel'); if(lad) lad.outerHTML=ladderHTML();
+        $('m41b').disabled=false;
+        if(minVal<1.6) award('m41');
+      }});
+  });
+  $('m41b').addEventListener('pointerdown',()=>{
+    if(!MODELS.winBook) return;
+    const o=$('m41o'); o.classList.remove('hide');
+    o.textContent=windowBabble(MODELS.winBook,110,0.9,(Math.random()*1e9)|0);
+  });
+  wireChrome(el);
+ });
+
+defM('m42','the drill floor',
+ 'The drill floor: echo two letters back. you can do it — can the <b>window</b>?<span class="sub">play three drills yourself, then train it and test it on pairs it never saw.</span>',
+ el=>{
+  const rng=rngOf(999);
+  const myPairs=[0,1,2].map(i=>DRILLS.testPairs[i]);
+  const fill=['then','go','well'];
+  const H={r:0,pos:0,hits:0};
+  el.innerHTML=missionChrome(MISSIONS.m42,
+    '<div class="sent" id="m42s"></div>'
+    +keysHTML()
+    +'<div class="tiles" id="m42t"></div>'
+    +'<div class="cap" id="m42c"></div>'
+    +'<div class="row"><button class="primary" id="m42go" disabled>train the window on drills</button><button id="m42test" disabled>test it</button></div>');
+  const drawHand=()=>{
+    if(H.r>=3){ $('m42s').innerHTML='<span class="hit">you: '+H.hits+'/6 — trivial for you.</span> now the window.'; $('m42go').disabled=!!MODELS.winDrill; if(MODELS.winDrill) $('m42test').disabled=false; return; }
+    const p=myPairs[H.r], pre='say '+p+'. '+fill[H.r]+' ';
+    $('m42s').innerHTML='<span class="pre">'+esc(pre)+'</span>'+(H.pos>0?'<span class="hit">'+p[0]+'</span>':'')+'<span class="cur">▮</span>';
+  };
+  drawHand();
+  el.querySelector('.keys').addEventListener('pointerdown',e=>{
+    const b=e.target.closest('button'); if(!b||H.r>=3) return;
+    const p=myPairs[H.r], want=H.pos===0?p[0]:p[1];
+    const hit=VOCAB[+b.dataset.k]===want;
+    if(hit) H.hits++;
+    b.classList.add(hit?'good':'bad'); setTimeout(()=>{b.classList.remove('good');b.classList.remove('bad');},260);
+    H.pos++;
+    if(H.pos>=2){ H.pos=0; H.r++; }
+    drawHand();
+  });
+  $('m42go').addEventListener('pointerdown',()=>{
+    if(TRAIN||MODELS.winDrill) return;
+    const M=RECIPE.winDrill.mk(), r2=rngOf(RECIPE.winDrill.rngSeed);
+    MODELS.winDrill=M;
+    startTrain({label:'window at drill school',total:RECIPE.winDrill.steps,
+      stepFn:()=>windowStep(M,DRILLS.text,RECIPE.winDrill.B,RECIPE.winDrill.lr,r2),
+      after:()=>{ $('m42test').disabled=false; $('m42c').innerHTML='school done. now the test: pairs it <b>never drilled</b>.'; }});
+  });
+  $('m42test').addEventListener('pointerdown',()=>{
+    const M=MODELS.winDrill; if(!M) return;
+    const seen=echoScore(p=>windowBets(M,p),DRILLS.trainPairs.slice(0,8));
+    const nw=echoScore(p=>windowBets(M,p),DRILLS.testPairs.slice(0,8));
+    SAVE.seen.m42new=+(100*nw).toFixed(0); save();
+    $('m42t').innerHTML='<div class="tile"><div class="tv"><b>'+(100*seen).toFixed(0)+'%</b></div><div class="tk">pairs it drilled</div></div>'
+      +'<div class="tile"><div class="tv"><i>'+(100*nw).toFixed(0)+'%</i></div><div class="tk">pairs it never saw</div></div>';
+    $('m42c').innerHTML='<i>the window cannot echo new pairs.</i> the clue moves position — its slots are welded.';
+    award('m42');
+  });
+  wireChrome(el);
+ });
+// ===== act 5 =====
+function ensureDrillLM(after){
+  if(MODELS.lmDrill){ after&&after(); return; }
+  if(TRAIN) return;
+  const M=RECIPE.lmDrill.mk(), rng=rngOf(RECIPE.lmDrill.rngSeed);
+  startTrain({label:'the machine at drill school',total:RECIPE.lmDrill.steps,
+    stepFn:()=>lmStep(M,DRILLS.text,RECIPE.lmDrill.B,RECIPE.lmDrill.lr,rng),
+    after:()=>{ MODELS.lmDrill=M; after&&after(); }});
+}
+defM('m51','the machine takes the drill',
+ 'Same drills, new machine — one that can <b>look back</b> at what you said.<span class="sub">train it, test it on brand-new pairs, and put the score next to the window.</span>',
+ el=>{
+  el.innerHTML=missionChrome(MISSIONS.m51,
+    '<canvas class="viz" id="m51c"></canvas>'
+    +'<div class="tiles" id="m51t"></div>'
+    +'<div class="cap" id="m51cap">the window scored '+(SAVE.seen.m42new!=null?SAVE.seen.m42new+'%':'about 25%')+' on new pairs. beat it.</div>'
+    +'<div class="row"><button class="primary" id="m51go">train the machine</button><button id="m51test" '+(MODELS.lmDrill?'':'disabled')+'>test it</button></div>');
+  const hist=[];
+  const drawIt=()=>drawCurves($('m51c'),[{pts:hist,color:COLC.lamp,label:'drill surprise'}],[],{ycap:4});
+  drawIt();
+  $('m51go').addEventListener('pointerdown',()=>{
+    if(TRAIN||MODELS.lmDrill) return;
+    const M=RECIPE.lmDrill.mk(), rng=rngOf(RECIPE.lmDrill.rngSeed);
+    let last=NaN;
+    startTrain({label:'the machine at drill school',total:RECIPE.lmDrill.steps,
+      stepFn:()=>{ last=lmStep(M,DRILLS.text,RECIPE.lmDrill.B,RECIPE.lmDrill.lr,rng); return last; },
+      evalEvery:60,onEval:s=>{ hist.push([s,last]); drawIt(); },
+      after:()=>{ MODELS.lmDrill=M; $('m51test').disabled=false; }});
+  });
+  $('m51test').addEventListener('pointerdown',()=>{
+    const M=MODELS.lmDrill; if(!M) return;
+    const nw=echoScore(p=>lmBets(M,p),DRILLS.testPairs.slice(0,8));
+    const seen=echoScore(p=>lmBets(M,p),DRILLS.trainPairs.slice(0,8));
+    SAVE.seen.m51new=+(100*nw).toFixed(0); save();
+    $('m51t').innerHTML='<div class="tile"><div class="tv"><b>'+(100*seen).toFixed(0)+'%</b></div><div class="tk">pairs it drilled</div></div>'
+      +'<div class="tile"><div class="tv"><u>'+(100*nw).toFixed(0)+'%</u></div><div class="tk">pairs it never saw</div></div>'
+      +'<div class="tile"><div class="tv"><i>'+(SAVE.seen.m42new!=null?SAVE.seen.m42new:25)+'%</i></div><div class="tk">the window got</div></div>'
+      +'<div class="tile"><div class="tv"><b>'+paramCount(M.P)+'</b></div><div class="tk">dials</div></div>';
+    $('m51cap').innerHTML='it echoes pairs it <b>never saw</b>. something inside learned to look back. next: watch it look.';
+    if(nw>=0.7) award('m51');
+  });
+  wireChrome(el);
+ });
+
+defM('m52','watch it look',
+ 'Watch it look: the machine aims a <b>spotlight</b> at the pair while echoing.<span class="sub">tap any cell for the real ask·tag arithmetic behind the focus.</span>',
+ el=>{
+  const pairs=['vk','zw','jq','mx'];
+  const fills=['then','go','right'];
+  const S={pair:'vk',fill:'then',hi:2,taps:0,heads:0,seenHeads:{}};
+  el.innerHTML=missionChrome(MISSIONS.m52,
+    '<div class="chips" id="m52p"></div>'
+    +'<div class="chips" id="m52h"></div>'
+    +'<div class="fstrip" id="m52s"></div>'
+    +'<div class="inspect" id="m52i">the gold cell is <b>now</b> — the position about to bet. teal glow = where its spotlight rests. tap cells for numbers.</div>'
+    +'<div class="cap" id="m52c"></div>');
+  let F=null;
+  const heads=[['L1H0','the pair hunter',2],['L0H1','the behind-me head',1],['L0H0','loose scanner',0],['L1H1','second hunter',3]];
+  const render=()=>{
+    const M=MODELS.lmDrill;
+    $('m52p').innerHTML=pairs.map(p=>'<button class="'+(p===S.pair?'on':'')+'" data-p="'+p+'">say '+p+'</button>').join('')
+      +fills.map(f=>'<button class="'+(f===S.fill?'on':'')+'" data-f="'+f+'">'+f+'</button>').join('');
+    if(!M){ $('m52s').innerHTML='<span class="cap">the machine is not trained yet.</span>'; $('m52c').innerHTML='<b>warm it up</b> below.';
+      $('m52h').innerHTML='<button id="m52w">warm up the machine</button>';
+      $('m52w').addEventListener('pointerdown',()=>ensureDrillLM(render));
+      return; }
+    F=echoFocus(M,S.pair,S.fill);
+    const row=F.rows[S.hi];
+    const T=F.text.length;
+    $('m52h').innerHTML=heads.map((h,i)=>'<button class="'+(S.hi===h[2]?'on':'')+'" data-h="'+h[2]+'">'+h[0]+' · '+h[1]+'</button>').join('');
+    const peak=row.focus.indexOf(Math.max(...row.focus));
+    let h='';
+    for(let t=0;t<T;t++){
+      const a=row.focus[t]||0;
+      h+='<div class="fcell'+(t===peak?' peak':'')+(t===T-1?' qpos':'')+'" data-t="'+t+'">'
+        +'<div class="u" style="opacity:'+(0.85*a).toFixed(3)+'"></div><span>'+GLYPH(F.text[t])+'</span></div>';
+    }
+    $('m52s').innerHTML=h;
+    $('m52c').innerHTML='head <b>'+heads.find(x=>x[2]===S.hi)[0]+'</b> · peak focus <b>'+(100*Math.max(...row.focus)).toFixed(0)+'%</b> at position '+peak
+      +(peak===F.pairAt||peak===F.pairAt+1?' — <u>exactly where you said the pair</u>':'');
+    $('m52s').querySelectorAll('.fcell').forEach(c=>c.addEventListener('pointerdown',()=>{
+      const t=+c.dataset.t, sc=row.scores[t], fo=row.focus[t];
+      $('m52i').innerHTML='ask of <b>'+GLYPH(F.text[T-1])+'</b> (now) · tag of <b>'+GLYPH(F.text[t])+'</b> (pos '+t+')<br>'
+        +'match = ask·tag = <b>'+(sc==null?'—':sc.toFixed(2))+'</b> → focus <b>'+(100*fo).toFixed(1)+'%</b>'
+        +'<br><span class="dim">focus = the match, squashed against every other match. cargo flows in proportion.</span>';
+      S.taps++; maybeStar();
+    }));
+    $('m52p').querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',()=>{
+      if(b.dataset.p) S.pair=b.dataset.p;
+      if(b.dataset.f) S.fill=b.dataset.f;
+      render();
+    }));
+    $('m52h').querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',()=>{
+      S.hi=+b.dataset.h; S.seenHeads[S.hi]=1; maybeStar(); render();
+    }));
+  };
+  const maybeStar=()=>{ if(S.taps>=1&&Object.keys(S.seenHeads).length>=2) award('m52'); };
+  render();
+  wireChrome(el);
+ });
+
+// ===== act 6 =====
+defM('m61','the assembly',
+ 'The full machine, part by part — every box <b>earned</b> its place.<span class="sub">tap each part. total: 27,872 dials, all nudged by votes.</span>',
+ el=>{
+  const parts=[
+   ['letters → vectors','each letter becomes a learned list of 32 numbers, plus a position vector so order exists.'],
+   ['the spotlight ×2','two heads: every position writes ask, tag, cargo. focus goes where ask matches tag. this is what rescued the echo.'],
+   ['the think step','after looking, each position chews what it gathered: dials, bends, dials. look then think.'],
+   ['skip wires','every part adds to a running signal instead of replacing it — nothing learned is thrown away.'],
+   ['the leveler','re-levels the signal between parts so nothing drowns anything out. boring, essential.'],
+   ['stack it twice','look-think, then look-think again. the second look can use what the first one built.'],
+   ['the bets','one last set of dials turns the final vectors into 28 bets. surprise scores them; votes flow back.']];
+  el.innerHTML=missionChrome(MISSIONS.m61,
+    '<div class="tiles"><div class="tile"><div class="tv"><b>27,872</b></div><div class="tk">dials in this machine</div></div>'
+    +'<div class="tile"><div class="tv"><b>2</b> × look-think</div><div class="tk">the whole recipe</div></div></div>'
+    +'<div class="schem" id="m61s"></div>'
+    +'<div class="inspect" id="m61i">tap a part.</div>');
+  const seen={};
+  const render=()=>{
+    $('m61s').innerHTML=parts.map((p,i)=>'<div class="part'+(seen[i]?' seen':'')+'" data-i="'+i+'"><div class="pn">'+p[0]+'</div></div>'
+      +(i<parts.length-1?'<div class="arrow">▼</div>':'')).join('');
+    $('m61s').querySelectorAll('.part').forEach(d=>d.addEventListener('pointerdown',()=>{
+      const i=+d.dataset.i; seen[i]=1;
+      $('m61i').innerHTML='<b>'+parts[i][0]+'</b><br><span class="dim">'+parts[i][1]+'</span>';
+      if(Object.keys(seen).length>=parts.length) award('m61');
+      render();
+    }));
+  };
+  render();
+  wireChrome(el);
+ });
+
+defM('m62','the position switch',
+ 'One switch: zero the <b>position</b> vectors and watch the echo collapse.<span class="sub">without a sense of place, look-back has nowhere to stand.</span>',
+ el=>{
+  el.innerHTML=missionChrome(MISSIONS.m62,
+    '<div class="tiles" id="m62t"></div>'
+    +'<div class="cap" id="m62c">the drill machine, tested live, eight new pairs each run.</div>'
+    +'<div class="row"><button class="primary" id="m62on">test · position on</button><button id="m62off">test · position zeroed</button></div>');
+  const res={};
+  const show=()=>{ $('m62t').innerHTML=
+    '<div class="tile"><div class="tv">'+(res.on!=null?'<u>'+res.on+'%</u>':'—')+'</div><div class="tk">echo · position on</div></div>'
+    +'<div class="tile"><div class="tv">'+(res.off!=null?'<i>'+res.off+'%</i>':'—')+'</div><div class="tk">echo · position zeroed</div></div>';
+    if(res.on!=null&&res.off!=null){
+      $('m62c').innerHTML='same dials, same spotlight — only the sense of <b>place</b> removed. the circuit has nowhere to stand.';
+      award('m62');
+    }
+  };
+  show();
+  const test=off=>{
+    const run=()=>{
+      const M=MODELS.lmDrill;
+      let keep=null;
+      if(off){ keep=M.wpe.data.slice(); M.wpe.data.fill(0); }
+      const acc=echoScore(p=>lmBets(M,p),DRILLS.testPairs.slice(0,8));
+      if(off) M.wpe.data.set(keep);
+      res[off?'off':'on']=+(100*acc).toFixed(0);
+      show();
+    };
+    if(!MODELS.lmDrill){ toast('warming the machine up first'); ensureDrillLM(run); }
+    else run();
+  };
+  $('m62on').addEventListener('pointerdown',()=>test(false));
+  $('m62off').addEventListener('pointerdown',()=>test(true));
+  wireChrome(el);
+ });
+
+defM('m63','the control room',
+ 'The control room: train the whole machine on the book — and learn to <b>stop</b>.<span class="sub">watch both curves. the dip is the skill. then melt it on purpose.</span>',
+ el=>{
+  const CR=window.__CR=window.__CR||{steps:0,trainPts:[],valPts:[],minVal:1e9,minStep:0,lr:0.01,rail:true,book:'full',melted:false,model:null,rng:null,batchLoss:NaN};
+  el.innerHTML=missionChrome(MISSIONS.m63,
+    '<canvas class="viz" id="m63c"></canvas>'
+    +'<div class="tiles" id="m63t"></div>'
+    +'<div class="chips" id="m63k"></div>'
+    +'<div class="verdict hide" id="m63v"></div>'
+    +ladderHTML()
+    +'<div class="row"><button class="primary" id="m63go">train 250 steps</button><button id="m63r">reset dials</button></div>');
+  const text=()=>CR.book==='full'?SPLIT.train:SPLIT.train.slice(0,300);
+  const drawIt=()=>drawCurves($('m63c'),
+    [{pts:CR.trainPts,color:COLC.lamp,label:'own book'},{pts:CR.valPts,color:COLC.teal,label:'never-studied pages'}],
+    [{y:counterSurprise(counter(3),3,SPLIT.val),label:'counter·3 '+f2(counterSurprise(counter(3),3,SPLIT.val)),color:COLC.mute}],{ycap:6});
+  const tiles=()=>{ $('m63t').innerHTML=
+    '<div class="tile"><div class="tv"><b>'+CR.steps+'</b></div><div class="tk">steps</div></div>'
+    +'<div class="tile"><div class="tv"><b>'+(isFinite(CR.batchLoss)?f2(CR.batchLoss):'—')+'</b></div><div class="tk">surprise now</div></div>'
+    +'<div class="tile"><div class="tv">'+(CR.minVal<1e8?'<u>'+f2(CR.minVal)+'</u> @ '+CR.minStep:'—')+'</div><div class="tk">best on new pages</div></div>'
+    +'<div class="tile"><div class="tv"><b>'+(CR.model?paramCount(CR.model.P):27872)+'</b></div><div class="tk">dials</div></div>'; };
+  const knobs=()=>{ $('m63k').innerHTML=
+    [0.001,0.01,0.25,0.9].map(l=>'<button class="'+(CR.lr===l?'on':'')+'" data-lr="'+l+'">step '+l+'</button>').join('')
+    +'<button class="'+(CR.rail?'good':'')+'" data-rail="1">rail '+(CR.rail?'on':'off')+'</button>'
+    +'<button class="'+(CR.book==='tiny'?'on':'')+'" data-book="1">book: '+CR.book+'</button>';
+    $('m63k').querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',()=>{
+      if(b.dataset.lr) CR.lr=+b.dataset.lr;
+      if(b.dataset.rail) CR.rail=!CR.rail;
+      if(b.dataset.book){ CR.book=CR.book==='full'?'tiny':'full'; }
+      knobs();
+    }));
+  };
+  drawIt(); tiles(); knobs();
+  $('m63go').addEventListener('pointerdown',()=>{
+    if(TRAIN) return;
+    if(!CR.model){ CR.model=RECIPE.lmBook.mk(); CR.rng=rngOf(RECIPE.lmBook.rngSeed); CR.melted=false; }
+    const M=CR.model;
+    startTrain({label:'the machine on the book',total:250,
+      stepFn:()=>{ CR.batchLoss=lmStep(M,text(),RECIPE.lmBook.B,CR.lr,CR.rng,!CR.rail); CR.steps++; return CR.batchLoss; },
+      evalEvery:50,
+      onEval:()=>{
+        CR.trainPts.push([CR.steps,Math.min(8,CR.batchLoss)]);
+        const va=lmSurprise(M,SPLIT.val.slice(0,420));
+        CR.valPts.push([CR.steps,Math.min(8,va)]);
+        drawIt(); tiles();
+        if(!isFinite(CR.batchLoss)||CR.batchLoss>8){ CR.melted=true; if(TRAIN) TRAIN.stop=true; }
+      },
+      after:()=>{
+        if(CR.melted){
+          const v=$('m63v'); v.classList.remove('hide');
+          v.innerHTML='<i>meltdown.</i> step '+CR.lr+' with the rail '+(CR.rail?'on':'off')+' blew the dials apart. reset and try step 0.01.';
+          SAVE.seen.m63melt=1; save();
+        }else{
+          const va=lmSurprise(M,SPLIT.val);
+          if(va<CR.minVal&&CR.book==='full'){ CR.minVal=va; CR.minStep=CR.steps; SNAPS.lmBookDip=snapParams(M); SNAPS.lmBookCfg=M.cfg; }
+          setLadder('machine',CR.minVal<1e8?CR.minVal:va);
+          const lad=el.querySelector('.panel'); if(lad) lad.outerHTML=ladderHTML();
+          if(CR.minVal<1.45&&CR.book==='full'&&!SAVE.stars.m63){
+            award('m63');
+            const v=$('m63v'); v.classList.remove('hide');
+            v.innerHTML='<b>the machine leads the ladder.</b> keep training and watch new-page surprise turn back up — then you have met the dip. melting it (rail off, step 0.9) is part two.';
+          }
+        }
+        drawIt(); tiles();
+      }});
+  });
+  $('m63r').addEventListener('pointerdown',()=>{
+    if(TRAIN) return;
+    CR.model=null; CR.steps=0; CR.trainPts.length=0; CR.valPts.length=0; CR.minVal=1e9; CR.minStep=0; CR.batchLoss=NaN; CR.melted=false;
+    $('m63v').classList.add('hide');
+    drawIt(); tiles();
+  });
+  wireChrome(el);
+ });
+
+// ===== act 7 =====
+function dipModel(){
+  if(!SNAPS.lmBookDip) return null;
+  if(!MODELS.lmServe){ MODELS.lmServe=makeLM(SNAPS.lmBookCfg,1); }
+  restoreParams(MODELS.lmServe,SNAPS.lmBookDip);
+  return MODELS.lmServe;
+}
+function warmServe(el,after){
+  if(SNAPS.lmBookDip){ after&&after(); return; }
+  if(TRAIN) return;
+  const M=RECIPE.lmBook.mk(), rng=rngOf(RECIPE.lmBook.rngSeed);
+  let minVal=1e9;
+  startTrain({label:'warming the machine to its dip',total:RECIPE.lmBook.steps,
+    stepFn:()=>lmStep(M,SPLIT.train,RECIPE.lmBook.B,RECIPE.lmBook.lr,rng),
+    evalEvery:150,
+    onEval:()=>{ const va=lmSurprise(M,SPLIT.val.slice(0,420)); if(va<minVal){ minVal=va; SNAPS.lmBookDip=snapParams(M); SNAPS.lmBookCfg=M.cfg; } },
+    after:()=>{ const va=lmSurprise(M,SPLIT.val); setLadder('machine',Math.min(minVal,va)); after&&after(); }});
+}
+function serveUI(el,capId,outId,run){
+  // shared serve runner with live bets
+  let running=false;
+  return {
+    go(prompt,opts,done){
+      if(running) return; running=true;
+      const M=dipModel(); if(!M){ running=false; return; }
+      let out='';
+      const stepOne=()=>{
+        if(!running||out.length>=opts.len){ running=false; done&&done(out); return; }
+        const bets=lmBets(M,prompt+out);
+        let ci;
+        if(opts.greedy){ ci=0; for(let i=1;i<NV;i++) if(bets[i]>bets[ci]) ci=i; }
+        else{
+          const sh=reshapeBets(bets,opts.temp,opts.slice);
+          let r=Math.random(),a=0; ci=NV-1;
+          for(let i=0;i<NV;i++){ a+=sh[i]; if(r<a){ci=i;break;} }
+        }
+        out+=VOCAB[ci];
+        const bel=$(capId); if(bel) bel.innerHTML=betsBarHTML(bets,ci,6);
+        const oel=$(outId); if(oel) oel.innerHTML=esc(prompt)+'<b>'+esc(out)+'</b><span class="cur">▮</span>';
+        setTimeout(stepOne,46);
+      };
+      stepOne();
+    },
+    stop(){ running=false; }
+  };
+}
+defM('m71','the serving window',
+ 'The serving window: type, and watch it <b>bet</b> before every letter it writes.<span class="sub">temp reshapes the bets. slice keeps the big ones. greedy takes the top.</span>',
+ el=>{
+  const S={prompt:'the ',temp:0.9,slice:1,greedy:false,runs:0};
+  el.innerHTML=missionChrome(MISSIONS.m71,
+    '<div class="out" id="m71o">'+esc(S.prompt)+'<span class="cur">▮</span></div>'
+    +'<div class="bets" id="m71b"><div class="cap">its bets will appear here, letter by letter.</div></div>'
+    +'<div class="chips" id="m71p"></div>'
+    +'<div class="chips" id="m71k"></div>'
+    +'<div class="row"><button class="primary" id="m71go">write</button><button id="m71stop">stop</button></div>');
+  const sv=serveUI(el,'m71b','m71o');
+  const presets=['the ','the man ','the fox ','winter '];
+  const chips=()=>{
+    $('m71p').innerHTML=presets.map(p=>'<button class="'+(S.prompt===p?'on':'')+'" data-p="'+esc(p)+'">“'+p.trim()+' ”</button>').join('');
+    $('m71k').innerHTML=[0.7,0.9,1.6,2.6].map(t=>'<button class="'+(!S.greedy&&S.temp===t?'on':'')+'" data-t="'+t+'">temp '+t+'</button>').join('')
+      +[1,0.9,0.5].map(s=>'<button class="'+(S.slice===s?'on':'')+'" data-s="'+s+'">slice '+s+'</button>').join('')
+      +'<button class="'+(S.greedy?'on':'')+'" data-g="1">greedy</button>';
+    $('m71p').querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',()=>{S.prompt=b.dataset.p;$('m71o').innerHTML=esc(S.prompt)+'<span class="cur">▮</span>';chips();}));
+    $('m71k').querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',()=>{
+      if(b.dataset.t){S.temp=+b.dataset.t;S.greedy=false;}
+      if(b.dataset.s)S.slice=+b.dataset.s;
+      if(b.dataset.g)S.greedy=!S.greedy;
+      chips();
+    }));
+  };
+  chips();
+  $('m71go').addEventListener('pointerdown',()=>{
+    const start=()=>sv.go(S.prompt,{len:90,temp:S.temp,slice:S.slice,greedy:S.greedy},()=>{
+      S.runs++; if(S.runs>=2) award('m71');
+    });
+    if(!SNAPS.lmBookDip){ toast('warming the machine to its dip first'); warmServe(el,start); }
+    else start();
+  });
+  $('m71stop').addEventListener('pointerdown',()=>sv.stop());
+  wireChrome(el);
+ });
+
+defM('m72','three personalities',
+ 'Three settings, three personalities: the <b>parrot</b>, the writer, the mush.<span class="sub">greedy loops. warm temp invents. hot temp shreds words. verdicts are measured.</span>',
+ el=>{
+  const done={};
+  el.innerHTML=missionChrome(MISSIONS.m72,
+    '<div class="out" id="m72o">pick a personality.</div>'
+    +'<div class="tiles" id="m72t"></div>'
+    +'<div class="row"><button id="m72a">greedy</button><button id="m72b">temp 0.9</button><button id="m72c">temp 2.6</button></div>'
+    +'<div class="cap" id="m72cap"></div>');
+  const run=(kind)=>{
+    const doRun=()=>{
+      const M=dipModel();
+      const opts=kind==='a'?{greedy:true,temp:1,slice:1}:kind==='b'?{greedy:false,temp:0.9,slice:1}:{greedy:false,temp:2.6,slice:1};
+      const res=lmSample(M,'the ',110,opts.temp,opts.slice,rngOf((Math.random()*1e9)|0),opts.greedy);
+      const wr=wordRate(res.text), lp=findLoop(res.text);
+      const o=$('m72o');
+      if(lp){ const s=lp.at,e2=Math.min(res.text.length,lp.at+3*lp.period);
+        o.innerHTML=esc(res.text.slice(0,s))+'<u>'+esc(res.text.slice(s,e2))+'</u>'+esc(res.text.slice(e2)); }
+      else o.textContent=res.text;
+      done[kind]={wr,loop:!!lp};
+      $('m72t').innerHTML=
+        '<div class="tile"><div class="tv">'+(lp?'<i>yes · every '+lp.period+' letters</i>':'<b>no</b>')+'</div><div class="tk">loop detected</div></div>'
+        +'<div class="tile"><div class="tv"><b>'+(100*wr).toFixed(0)+'%</b></div><div class="tk">real book words</div></div>';
+      $('m72cap').innerHTML=kind==='a'?(lp?'<i>the parrot.</i> top bet, every time, forever — a cycle was inevitable.':'greedy — run it again, the cycle usually bites.')
+        :kind==='b'?'the writer: mostly real words, fresh order. this is why serving always draws with some temp.'
+        :'<i>the mush.</i> hot temp hands the long tail the pen.';
+      if(done.a&&done.b&&done.c) award('m72');
+    };
+    if(!SNAPS.lmBookDip){ toast('warming the machine first'); warmServe(el,doRun); } else doRun();
+  };
+  $('m72a').addEventListener('pointerdown',()=>run('a'));
+  $('m72b').addEventListener('pointerdown',()=>run('b'));
+  $('m72c').addEventListener('pointerdown',()=>run('c'));
+  wireChrome(el);
+ });
+
+defM('m73','the confident inventor',
+ 'Ask about things the book never said — it answers <b>anyway</b>, fluently.<span class="sub">a bet machine cannot say i do not know. it was never taught silence.</span>',
+ el=>{
+  const prompts=['the fox and the moon ','why is the sky ','the man told the cat '];
+  let runs=0;
+  el.innerHTML=missionChrome(MISSIONS.m73,
+    '<div class="chips" id="m73p">'+prompts.map((p,i)=>'<button data-i="'+i+'">“'+p.trim()+'”</button>').join('')+'</div>'
+    +'<div class="out" id="m73o">these openings appear nowhere in the book. ask anyway.</div>'
+    +'<div class="cap" id="m73c"></div>'
+    +'<div class="inspect" id="m73i">it will not stall, hedge, or refuse — it has only bets. whatever comes out will be <b>fluent</b>, book-flavored, and possibly false. fluency is the product; truth is a side effect that needs its own machinery.</div>');
+  $('m73p').querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',()=>{
+    const p=prompts[+b.dataset.i];
+    const doRun=()=>{
+      const M=dipModel();
+      const res=lmSample(M,p,90,0.8,1,rngOf((Math.random()*1e9)|0));
+      $('m73o').innerHTML=esc(p)+'<b>'+esc(res.text)+'</b>';
+      $('m73c').innerHTML='real book words: <b>'+(100*wordRate(res.text)).toFixed(0)+'%</b> — fluent, off any page it studied.';
+      runs++; if(runs>=2) award('m73');
+    };
+    if(!SNAPS.lmBookDip){ toast('warming the machine first'); warmServe(el,doRun); } else doRun();
+  }));
+  wireChrome(el);
+ });
+
+// ===== act 8 =====
+defM('m81','pieces, not letters',
+ 'Real machines read <b>pieces</b>, not letters: merge the commonest pair, repeat.<span class="sub">watch the book compress as pieces grow. gpt reads about one hundred thousand of these.</span>',
+ el=>{
+  const st=bpeInit(BASE_BOOK);
+  const n0=bpePieceCount(st);
+  el.innerHTML=missionChrome(MISSIONS.m81,
+    '<div class="tiles" id="m81t"></div>'
+    +'<div class="inspect" id="m81l">the commonest neighbors right now:</div>'
+    +'<div class="out" id="m81o"></div>'
+    +'<div class="row"><button class="primary" id="m81go">merge the top pair</button></div>');
+  const preview=()=>{
+    let h='',count=0;
+    for(const s of st.seqs){ if(count>16) break; h+='<span class="dim">·</span>'+s.parts.map(esc).join('<span class="dim">·</span>')+' '; count++; }
+    $('m81o').innerHTML=h;
+  };
+  const render=()=>{
+    const pc=bpePairCounts(st);
+    const top=[...pc.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);
+    $('m81t').innerHTML=
+      '<div class="tile"><div class="tv"><b>'+bpePieceCount(st)+'</b> <span class="dim">of '+n0+'</span></div><div class="tk">pieces in the book</div></div>'
+      +'<div class="tile"><div class="tv"><b>'+st.merges.length+'</b></div><div class="tk">merges made</div></div>';
+    $('m81l').innerHTML='commonest neighbors: '+top.map(t=>'<b>'+esc(t[0])+'</b> <span class="dim">×'+t[1]+'</span>').join(' · ')
+      +(st.merges.length?'<br><span class="dim">your pieces so far: '+st.merges.map(m=>esc(m.ab)).join(' ')+'</span>':'');
+    preview();
+  };
+  render();
+  $('m81go').addEventListener('pointerdown',()=>{
+    const m=bpeMergeStep(st);
+    if(!m) return;
+    render();
+    toast('merged <b>'+esc(m.a)+'</b>+<b>'+esc(m.b)+'</b> → <b>'+esc(m.ab)+'</b> · seen ×'+m.count);
+    if(st.merges.length>=10) award('m81');
+  });
+  wireChrome(el);
+ });
+
+defM('m82','school, then job training',
+ 'School made a babbler. A short <b>job training</b> makes it answer questions.<span class="sub">tune the trained machine on ask-tell pages, then ask it your own.</span>',
+ el=>{
+  const XS=['dog','fox','crow','fish','egg'];
+  const YS=['hot','cold','wet','dim'];
+  let asks=0;
+  el.innerHTML=missionChrome(MISSIONS.m82,
+    bookBoxHTML('m82','the job book',QA_BOOK)
+    +'<div class="out" id="m82o">the machine, fresh from school, has never seen an ask-tell page.</div>'
+    +'<div class="chips" id="m82q"></div>'
+    +'<div class="row"><button class="primary" id="m82ft">run job training</button></div>'
+    +'<div class="cap" id="m82c"></div>');
+  const chips=()=>{
+    $('m82q').innerHTML=XS.map(x=>'<button data-x="'+x+'">where is the '+x+'</button>').join('')
+      +YS.map(y=>'<button data-y="'+y+'">what is '+y+'</button>').join('');
+    $('m82q').querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',()=>{
+      const q=b.dataset.x?('ask. where is the '+b.dataset.x+'. tell.'):('ask. what is '+b.dataset.y+'. tell.');
+      const M=MODELS.lmFT||dipModel();
+      if(!M){ toast('warm up in the control room first — or run job training'); return; }
+      const res=lmSample(M,q,40,0.5,1,rngOf((Math.random()*1e9)|0));
+      let a=res.text; const cut=a.indexOf('. '); if(cut>0) a=a.slice(0,cut+1);
+      $('m82o').innerHTML=esc(q)+'<b>'+esc(a)+'</b>';
+      $('m82c').innerHTML=(MODELS.lmFT?'tuned':'<i>untuned</i>')+' machine · '+(MODELS.lmFT?'watch the format hold. small machine, short school — most answers land, a few wobble.':'school alone never taught the ask-tell shape.');
+      if(MODELS.lmFT){ asks++; if(asks>=2) award('m82'); }
+    }));
+  };
+  chips();
+  $('m82ft').addEventListener('pointerdown',()=>{
+    if(TRAIN||MODELS.lmFT) return;
+    const start=()=>{
+      const M=makeLM(SNAPS.lmBookCfg,1);
+      restoreParams(M,SNAPS.lmBookDip);
+      const rng=rngOf(407);
+      startTrain({label:'job training on ask-tell pages',total:600,
+        stepFn:()=>lmStep(M,QA_BOOK,12,0.005,rng),
+        after:()=>{ MODELS.lmFT=M; $('m82c').innerHTML='job training done — <b>same dials, new habits</b>. ask it.'; }});
+    };
+    if(!SNAPS.lmBookDip){ toast('warming the machine first'); warmServe(el,start); } else start();
+  });
+  wireChrome(el); wireBookBoxes(el);
+ });
+
+defM('m83','the bridge to the giants',
+ 'Your machine and the giants play the <b>same game</b> — theirs is a billion times bigger.<span class="sub">same bets, same surprise, same nudges. scale is the only new ingredient.</span>',
+ el=>{
+  el.innerHTML=missionChrome(MISSIONS.m83,
+    '<div class="tiles">'
+    +'<div class="tile"><div class="tv"><b>27,872</b> → <span class="dim">~10¹¹</span></div><div class="tk">dials (reported)</div></div>'
+    +'<div class="tile"><div class="tv"><b>5,443</b> → <span class="dim">~10¹³</span></div><div class="tk">book letters → pieces (reported)</div></div>'
+    +'<div class="tile"><div class="tv"><b>32</b> → <span class="dim">~10⁵⁺</span></div><div class="tk">context length (reported)</div></div>'
+    +'<div class="tile"><div class="tv"><b>2</b> → <span class="dim">~10²</span></div><div class="tk">look-think stacks (reported)</div></div>'
+    +'</div>'
+    +'<div class="inspect">nothing else changes. <b>same bets, same surprise, same votes, same nudges, same blueprint you tapped through in the machine room.</b> what changes with scale is what falls out: grammar, facts, code, translation — none of it asked for, all of it the cheapest way to keep surprise falling on the next trillion pieces.<br><br><span class="dim">after school and job training, one more stage exists that this toy only names: <b>thumbs school</b> — people rate answers, and the machine is nudged toward the liked ones. that, plus scale, is the assistant you talk to.</span></div>'
+    +'<div class="cap">the numbers with (reported) are public order-of-magnitude figures, not measured here. everything without it, you measured yourself.</div>');
+  award('m83');
+  wireChrome(el);
+ });
+// ---------- bosses ----------
+const BOSSES={};
+function defB(n,title,intro,render){ BOSSES[n]={n,title,intro,render}; }
+function bossPass(n){
+  if(!SAVE.boss['b'+n]){
+    SAVE.boss['b'+n]=1;
+    SAVE.notes[n-1]=FIELD_NOTES[n-1];
+    save();
+    toast('<b>boss down.</b> '+(n<8?'act '+(n+1)+' unlocked':'the table is yours'),true);
+  }
+}
+function bossChrome(b,inner){
+  return '<div id="goal">'+b.intro+'</div>'
+    +'<div class="trainbar hide"><div class="tt"></div><button data-stop="1">stop</button></div>'
+    +inner
+    +'<div class="foot"><button data-go="home">map</button>'
+    +(SAVE.boss['b'+b.n]?'<button class="next" data-go="home">passed — back to the map</button>':'')
+    +'</div>';
+}
+function quizRun(el,contId,questions,onDone){
+  // questions: [{q, opts:[..], key:idx, why:[per-option verdict html]}]
+  const S={i:0,right:0,answered:false};
+  const cont=$(contId);
+  const render=()=>{
+    const q=questions[S.i];
+    let h='<div class="dots">'+questions.map((_,k)=>'<div class="dot'+(k<S.i?' win':k===S.i?' on':'')+'"></div>').join('')+'</div>'
+      +'<div class="q">'+q.q+'</div><div class="opts">'
+      +q.opts.map((o,k)=>'<button data-k="'+k+'">'+o+'</button>').join('')+'</div>'
+      +'<div class="verdict hide" id="qv"></div>'
+      +'<div class="row hide" id="qn"><button class="primary">next</button></div>';
+    cont.innerHTML=h;
+    cont.querySelectorAll('.opts button').forEach(b=>b.addEventListener('pointerdown',()=>{
+      if(S.answered) return;
+      S.answered=true;
+      const k=+b.dataset.k, ok=k===q.key;
+      if(ok) S.right++;
+      b.classList.add(ok?'win':'lose');
+      cont.querySelectorAll('.opts button')[q.key].classList.add('win');
+      const v=$('qv'); v.classList.remove('hide');
+      v.innerHTML=(ok?'<b>right.</b> ':'<i>not this one.</i> ')+(q.why[k]||'');
+      $('qn').classList.remove('hide');
+    }));
+    $('qn').querySelector('button').addEventListener('pointerdown',()=>{
+      S.i++; S.answered=false;
+      if(S.i>=questions.length) onDone(S.right);
+      else render();
+    });
+  };
+  render();
+}
+
+defB(1,'beat the blind bettor',
+ 'Boss: beat the blind bettor over eight letters — <b>total surprise</b> wins.<span class="sub">big bet half, side bet quarter, the rest spread thin. under 21 passes.</span>',
+ el=>{
+  const rng=rngOf(2024+((SAVE.seen.b1try=(SAVE.seen.b1try||0)+1)));
+  save();
+  const spots=[]; for(let i=0;i<8;i++) spots.push(40+Math.floor(rng()*(BASE_BOOK.length-45)));
+  const S={r:0,total:0,big:null,side:null};
+  el.innerHTML=bossChrome(BOSSES[1],
+    '<div class="dots" id="b1d"></div>'
+    +'<div class="sent" id="b1s"></div>'
+    +'<div class="cap" id="b1c"></div>'
+    +keysHTML()
+    +'<div class="row"><button class="primary" id="b1go" disabled>face the truth</button></div>');
+  const draw=()=>{
+    $('b1d').innerHTML=Array.from({length:8},(_,k)=>'<div class="dot'+(k<S.r?' win':k===S.r?' on':'')+'"></div>').join('');
+    if(S.r>=8) return;
+    $('b1s').innerHTML='<span class="pre">'+esc(BASE_BOOK.slice(spots[S.r]-26,spots[S.r]))+'</span><span class="cur">▮</span>';
+    $('b1c').innerHTML='total surprise <b>'+S.total.toFixed(2)+'</b> · blind bettor is heading for <b>'+(8*UNIFORM_SURPRISE).toFixed(1)+'</b> · pass under <b>21</b>'
+      +(S.big!=null?' · big '+GLYPH(VOCAB[S.big]):'')+(S.side!=null?' · side '+GLYPH(VOCAB[S.side]):'');
+    el.querySelectorAll('.keys button').forEach(b=>b.classList.toggle('pick',+b.dataset.k===S.big||+b.dataset.k===S.side));
+    $('b1go').disabled=S.big==null||S.side==null;
+  };
+  draw();
+  el.querySelector('.keys').addEventListener('pointerdown',e=>{
+    const b=e.target.closest('button'); if(!b||S.r>=8) return;
+    const k=+b.dataset.k;
+    if(S.big==null) S.big=k; else if(S.side==null&&k!==S.big) S.side=k; else { S.big=k; S.side=null; }
+    draw();
+  });
+  $('b1go').addEventListener('pointerdown',()=>{
+    if(S.big==null||S.side==null||S.r>=8) return;
+    const ti=IDX[BASE_BOOK[spots[S.r]]];
+    S.total+=handBetSurprise(S.big,S.side,ti);
+    toast('truth: <b>'+GLYPH(VOCAB[ti])+'</b>'+(ti===S.big?' · your big bet · +0.69':ti===S.side?' · your side bet · +1.39':' · missed · +4.64'));
+    S.r++; S.big=null; S.side=null;
+    if(S.r>=8){
+      const ok=S.total<21;
+      $('b1s').innerHTML=ok?'<span class="hit">'+S.total.toFixed(1)+' — the blind bettor is beaten.</span>':'<span class="miss">'+S.total.toFixed(1)+' — over 21. read the context harder; big-bet the letter you feel.</span>';
+      $('b1c').innerHTML=ok?'this number — surprise on text — is the only score any of these machines is ever given.':'tap the boss again on the map to retry with fresh letters.';
+      if(ok){ bossPass(1); go('boss',1); }
+    }
+    else draw();
+  });
+  wireChrome(el);
+ });
+
+defB(2,'the counter interview',
+ 'Boss: three claims about the counter — pick what is <b>true</b>.<span class="sub">wrong picks get a live demonstration, not a lecture.</span>',
+ el=>{
+  const s3=counter(3), tr3=counterSurprise(s3,3,SPLIT.train), va3=counterSurprise(s3,3,SPLIT.val);
+  el.innerHTML=bossChrome(BOSSES[2],'<div id="b2q"></div>');
+  quizRun(el,'b2q',[
+   {q:'What does the counter actually hold?',
+    opts:['a sense of what words mean','tallies of how often each pairing followed each context — nothing else','a plan for the next sentence'],
+    key:1,why:['babble it at context 1 and read the mush — there is no meaning in there, only pair habits.','that is the whole machine: a table of tallies, plus division.','it has no plan — each letter is drawn fresh from a tally row.']},
+   {q:'More context memory made the counter…',
+    opts:['wiser about language everywhere','sharper on its own book, but the gap to never-studied pages grew to '+f2(va3-tr3),'exactly the same'],
+    key:1,why:['own book '+f2(tr3)+' but new pages '+f2(va3)+' — the growth was memorizing, not wisdom.','measured: own book '+f2(tr3)+', new pages '+f2(va3)+'. the gap is the tell.','the numbers moved a lot: '+f2(tr3)+' vs '+f2(va3)+'.']},
+   {q:'The fair score of a language machine is…',
+    opts:['surprise on its own book','how pleasant its babble sounds','surprise on pages it never studied'],
+    key:2,why:['its own book rewards memorizing — the counter aces that and learns nothing.','context-4 babble sounds perfect and is straight quotes. sound is not a score.','held-out surprise — the ladder — is the score everything in this game climbs.']}
+  ],right=>{
+    if(right>=2){ bossPass(2); go('boss',2); }
+    else{ $('b2q').innerHTML='<div class="verdict"><i>'+right+'/3.</i> revisit the memorizing gap, then try again from the map.</div>'; }
+  });
+  wireChrome(el);
+ });
+
+defB(3,'predict the discovery',
+ 'Boss: predict what training will <b>discover</b> — then run it and see.<span class="sub">call the huddle before the scatter settles. call the ladder before the score.</span>',
+ el=>{
+  el.innerHTML=bossChrome(BOSSES[3],
+    '<div class="q">A fresh squeeze is about to train from new random dials. Nobody tells it about letter kinds. <b>Which letters end up huddled?</b></div>'
+    +'<div class="opts" id="b3o"><button data-k="0">the letters of “the”</button><button data-k="1">the vowels</button><button data-k="2">rare letters like q and z scattered far apart</button></div>'
+    +'<canvas class="viz hide" id="b3c"></canvas>'
+    +'<div class="verdict hide" id="b3v"></div>');
+  let picked=null;
+  $('b3o').querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',()=>{
+    if(picked!=null||TRAIN) return;
+    picked=+b.dataset.k;
+    b.classList.add('on');
+    const M=makeBottleneck(8,((Math.random()*1e6)|0)+9), rng=rngOf((Math.random()*1e6)|0);
+    startTrain({label:'a fresh squeeze, training',total:2500,
+      stepFn:()=>bottleneckStep(M,SPLIT.train,32,0.05,rng),
+      after:()=>{
+        const cv=$('b3c'); cv.classList.remove('hide');
+        drawScatter(cv,pca2(M));
+        const c=vowelClustering(M);
+        const ok=picked===1, huddled=c.inter/c.intra>1.15;
+        const v=$('b3v'); v.classList.remove('hide');
+        v.innerHTML='measured: vowels sit <b>'+f2(c.intra)+'</b> apart, consonants <b>'+f2(c.inter)+'</b> away — '
+          +(huddled?'the vowels huddled again, fresh dice and all.':'a rare seed — the huddle is weak this run; run the mission again and it returns.')
+          +'<br>'+(ok?'<b>you called it.</b>':'<i>you called '+['“the”','vowels','rare letters'][picked]+'.</i> the machine groups by shared habits, and vowels share the most.');
+        if(ok&&huddled){ bossPass(3); go('boss',3); }
+        else if(!ok) v.innerHTML+='<br><span class="dim">retry from the map — predictions are free.</span>';
+      }});
+  }));
+  wireChrome(el);
+ });
+
+defB(4,'say it back',
+ 'Boss: pick two letters the machines never drilled. will the window <b>echo</b> you?<span class="sub">commit to a prediction first. then watch the bets.</span>',
+ el=>{
+  const S={a:null,b:null,pred:null};
+  el.innerHTML=bossChrome(BOSSES[4],
+    '<div class="cap" id="b4c">tap two letters for your pair.</div>'
+    +keysHTML()
+    +'<div class="chips" id="b4p"><button data-p="1">it will echo my pair</button><button data-p="0">it will fail</button></div>'
+    +'<div class="row"><button class="primary" id="b4go" disabled>run the drill</button></div>'
+    +'<div id="b4r"></div>');
+  const draw=()=>{
+    $('b4c').innerHTML='your pair: <b>'+(S.a??'▮')+(S.b??'▮')+'</b>'+(S.pred!=null?' · your call: <b>'+(S.pred?'it echoes':'it fails')+'</b>':'');
+    $('b4go').disabled=!(S.a&&S.b&&S.pred!=null);
+  };
+  draw();
+  el.querySelector('.keys').addEventListener('pointerdown',e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    const ch=VOCAB[+b.dataset.k];
+    if(ch===' '||ch==='.') return;
+    if(!S.a) S.a=ch; else if(!S.b&&ch!==S.a) S.b=ch; else {S.a=ch;S.b=null;}
+    draw();
+  });
+  $('b4p').querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',()=>{
+    S.pred=+b.dataset.p;
+    $('b4p').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    draw();
+  }));
+  $('b4go').addEventListener('pointerdown',()=>{
+    const run=()=>{
+      const M=MODELS.winDrill;
+      const pair=S.a+S.b, pre=drillPrompt(pair,'then');
+      const b1=windowBets(M,pre), c1=b1.indexOf(Math.max(...b1));
+      const b2=windowBets(M,pre+S.a), c2=b2.indexOf(Math.max(...b2));
+      const echoed=(VOCAB[c1]===S.a&&VOCAB[c2]===S.b);
+      $('b4r').innerHTML='<div class="cap">after “'+esc(pre)+'” its top bets:</div>'+betsBarHTML(b1,IDX[S.a],5)
+        +'<div class="cap">and for the second letter:</div>'+betsBarHTML(b2,IDX[S.b],5)
+        +'<div class="verdict">'+(echoed?'it echoed — rare luck on a drilled-adjacent pair.':'<i>it failed your pair.</i> the truth rows are nearly empty — it never learned to look.')
+        +'<br>'+(S.pred===(echoed?1:0)?'<b>your call was right.</b>':'your call missed — run it again with a new pair.')+'</div>';
+      if(S.pred===(echoed?1:0)){ bossPass(4); go('boss',4); }
+    };
+    if(!MODELS.winDrill){
+      toast('training the window on drills first');
+      const M=RECIPE.winDrill.mk(), r2=rngOf(RECIPE.winDrill.rngSeed);
+      startTrain({label:'window at drill school',total:RECIPE.winDrill.steps,
+        stepFn:()=>windowStep(M,DRILLS.text,RECIPE.winDrill.B,RECIPE.winDrill.lr,r2),
+        after:()=>{ MODELS.winDrill=M; run(); }});
+    } else run();
+  });
+  wireChrome(el);
+ });
+
+defB(5,'read the spotlight',
+ 'Boss: point where the <b>spotlight</b> will land before the machine looks.<span class="sub">two pairs, then one question about why the window failed.</span>',
+ el=>{
+  const rounds=[{pair:'gq',fill:'right'},{pair:'wz',fill:'go'}];
+  const S={i:0,hits:0};
+  el.innerHTML=bossChrome(BOSSES[5],'<div id="b5q"></div>');
+  const roundUI=()=>{
+    if(S.i>=rounds.length){ quiz(); return; }
+    const r=rounds[S.i];
+    const M=MODELS.lmDrill;
+    if(!M){ $('b5q').innerHTML='<div class="row"><button class="primary" id="b5w">warm up the machine</button></div>';
+      $('b5w').addEventListener('pointerdown',()=>ensureDrillLM(roundUI)); return; }
+    const F=echoFocus(M,r.pair,r.fill);
+    const T=F.text.length;
+    let h='<div class="q">round '+(S.i+1)+'/2 · the machine reads “<b>'+esc(F.text.trim())+'</b>” and must now echo. tap the cell where head <b>L1H0</b> will aim.</div><div class="fstrip" id="b5s">';
+    for(let t=0;t<T;t++) h+='<div class="fcell'+(t===T-1?' qpos':'')+'" data-t="'+t+'"><span>'+GLYPH(F.text[t])+'</span></div>';
+    h+='</div><div class="verdict hide" id="b5v"></div>';
+    $('b5q').innerHTML=h;
+    const row=F.rows[2];
+    const peak=row.focus.indexOf(Math.max(...row.focus));
+    $('b5s').querySelectorAll('.fcell').forEach(c=>c.addEventListener('pointerdown',()=>{
+      const t=+c.dataset.t;
+      const hit=Math.abs(t-peak)<=1;
+      if(hit) S.hits++;
+      $('b5s').querySelectorAll('.fcell').forEach((cc,k)=>{
+        const a=row.focus[k]||0;
+        cc.innerHTML='<div class="u" style="opacity:'+(0.85*a).toFixed(3)+'"></div><span>'+GLYPH(F.text[k])+'</span>';
+        if(k===peak) cc.classList.add('peak');
+      });
+      const v=$('b5v'); v.classList.remove('hide');
+      v.innerHTML=(hit?'<b>called it.</b>':'<i>it aimed elsewhere.</i>')+' peak '+(100*Math.max(...row.focus)).toFixed(0)+'% at position '+peak+' — the pair you asked it to echo.';
+      setTimeout(()=>{S.i++;roundUI();},1600);
+    }));
+  };
+  const quiz=()=>{
+    quizRun(el,'b5q',[
+     {q:'Why did the window fail the drills the spotlight passes?',
+      opts:['too few dials','its slots are welded to positions, and the pair moves','it never saw drills'],
+      key:1,why:['it had plenty — the window out-dialed the counter on the book.','exactly — content moved, slots could not follow. the spotlight aims by content match.','it trained on the same drills as the machine.']}
+    ],right=>{
+      const total=S.hits+right;
+      if(total>=2){ bossPass(5); go('boss',5); }
+      else $('b5q').innerHTML='<div class="verdict"><i>'+S.hits+'/2 spotlights, '+right+'/1 question.</i> replay watch-it-look, then retry.</div>';
+    });
+  };
+  roundUI();
+  wireChrome(el);
+ });
+
+defB(6,'training doctor',
+ 'Boss: training doctor — three sick runs, three <b>diagnoses</b>.<span class="sub">read the curves alone: melted, too timid, or memorizing.</span>',
+ el=>{
+  el.innerHTML=bossChrome(BOSSES[6],
+    '<div class="cap">three fresh little machines are training now — small ones, so the clinic is quick.</div>'
+    +'<div id="b6cases"><div class="cap">running…</div></div>');
+  const kinds=['melt','timid','memorize'];
+  const order=[2,0,1];
+  const labels={melt:'melted — step size blew it apart',timid:'too timid — barely moved',memorize:'memorizing — new pages turned upward'};
+  setTimeout(()=>{
+    const cases=order.map(i=>({kind:kinds[i],hist:runDoctor(kinds[i])}));
+    let h='';
+    cases.forEach((c,ci)=>{
+      h+='<div class="q">patient '+(ci+1)+'</div><canvas class="viz" id="b6c'+ci+'"></canvas>'
+        +'<div class="chips" id="b6k'+ci+'">'+kinds.map(k=>'<button data-k="'+k+'">'+labels[k].split(' — ')[0]+'</button>').join('')+'</div>';
+    });
+    h+='<div class="row"><button class="primary" id="b6go" disabled>submit diagnoses</button></div><div class="verdict hide" id="b6v"></div>';
+    $('b6cases').innerHTML=h;
+    const picks={};
+    cases.forEach((c,ci)=>{
+      const series=[{pts:c.hist.train,color:COLC.lamp,label:'own book'}];
+      if(c.hist.val.length) series.push({pts:c.hist.val,color:COLC.teal,label:'new pages'});
+      drawCurves($('b6c'+ci),series,[],{h:110,ycap:12});
+      $('b6k'+ci).querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',()=>{
+        picks[ci]=b.dataset.k;
+        $('b6k'+ci).querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+        $('b6go').disabled=Object.keys(picks).length<3;
+      }));
+    });
+    $('b6go').addEventListener('pointerdown',()=>{
+      let right=0;
+      cases.forEach((c,ci)=>{ if(picks[ci]===c.kind) right++; });
+      const v=$('b6v'); v.classList.remove('hide');
+      v.innerHTML=right>=2?('<b>'+right+'/3 — doctor.</b> '+cases.map((c,ci)=>'patient '+(ci+1)+': '+labels[c.kind]).join(' · ')):('<i>'+right+'/3.</i> '+cases.map((c,ci)=>'patient '+(ci+1)+': '+labels[c.kind]).join(' · ')+' · fresh patients on retry.');
+      if(right>=2){ bossPass(6); go('boss',6); }
+    });
+  },60);
+  wireChrome(el);
+ });
+
+defB(7,'the operator exam',
+ 'Boss: operator exam — produce a <b>loop</b>, a writer, and mush on demand.<span class="sub">the meters judge you: word rate and loop detector.</span>',
+ el=>{
+  const need={loop:false,write:false,mush:false};
+  const S={temp:0.9,greedy:false};
+  el.innerHTML=bossChrome(BOSSES[7],
+    '<div class="tiles" id="b7n"></div>'
+    +'<div class="chips" id="b7k"></div>'
+    +'<div class="out" id="b7o">set the knobs, then run. three boxes to light.</div>'
+    +'<div class="tiles" id="b7m"></div>'
+    +'<div class="row"><button class="primary" id="b7go">run 110 letters</button></div>');
+  const boxes=()=>{ $('b7n').innerHTML=
+    '<div class="tile"><div class="tv">'+(need.loop?'<u>lit</u>':'—')+'</div><div class="tk">a loop, caught</div></div>'
+    +'<div class="tile"><div class="tv">'+(need.write?'<u>lit</u>':'—')+'</div><div class="tk">a writer · 60%+ real words, no loop</div></div>'
+    +'<div class="tile"><div class="tv">'+(need.mush?'<u>lit</u>':'—')+'</div><div class="tk">mush · under 40% real words</div></div>'; };
+  const knobs=()=>{ $('b7k').innerHTML=
+    [0.7,0.9,1.6,2.6].map(t=>'<button class="'+(!S.greedy&&S.temp===t?'on':'')+'" data-t="'+t+'">temp '+t+'</button>').join('')
+    +'<button class="'+(S.greedy?'on':'')+'" data-g="1">greedy</button>';
+    $('b7k').querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',()=>{
+      if(b.dataset.t){S.temp=+b.dataset.t;S.greedy=false;}
+      if(b.dataset.g)S.greedy=!S.greedy;
+      knobs();
+    }));
+  };
+  boxes(); knobs();
+  $('b7go').addEventListener('pointerdown',()=>{
+    const doRun=()=>{
+      const M=dipModel();
+      const res=lmSample(M,'the ',110,S.temp,1,rngOf((Math.random()*1e9)|0),S.greedy);
+      const wr=wordRate(res.text), lp=findLoop(res.text);
+      const o=$('b7o');
+      if(lp){ const s=lp.at,e2=Math.min(res.text.length,lp.at+3*lp.period);
+        o.innerHTML=esc(res.text.slice(0,s))+'<u>'+esc(res.text.slice(s,e2))+'</u>'+esc(res.text.slice(e2)); }
+      else o.textContent=res.text;
+      $('b7m').innerHTML='<div class="tile"><div class="tv">'+(lp?'<b>loop · every '+lp.period+'</b>':'no loop')+'</div><div class="tk">loop detector</div></div>'
+        +'<div class="tile"><div class="tv"><b>'+(100*wr).toFixed(0)+'%</b></div><div class="tk">real book words</div></div>';
+      if(lp) need.loop=true;
+      if(!lp&&wr>=0.6&&!S.greedy) need.write=true;
+      if(wr<=0.4) need.mush=true;
+      boxes();
+      if(need.loop&&need.write&&need.mush){ bossPass(7); go('boss',7); }
+    };
+    if(!SNAPS.lmBookDip){ toast('warming the machine first'); warmServe(el,doRun); } else doRun();
+  });
+  wireChrome(el);
+ });
+
+defB(8,'the interview',
+ 'Final boss: the interview. six questions from the whole <b>road</b>.<span class="sub">five right and you can sit at the table.</span>',
+ el=>{
+  el.innerHTML=bossChrome(BOSSES[8],'<div id="b8q"></div>');
+  quizRun(el,'b8q',[
+   {q:'A scientist says “we just train it to predict the next token.” In your words, the machine is…',
+    opts:['looking answers up in its book','betting on the next piece and getting scored by surprise, trillions of times','following grammar rules its makers wrote'],
+    key:1,why:['nothing is looked up at serve time — the book is gone; only dials remain.','the whole apprenticeship in one line. token = piece, loss = surprise.','nobody writes rules — everything rides on dials nudged by votes.']},
+   {q:'“The gradients flow back through the residual stream.” The gradients are…',
+    opts:['the votes every dial gets after each surprise','the model’s bets','random noise added on purpose'],
+    key:0,why:['exactly — vote = gradient, and skip wires are the stream they flow along.','bets are the output; votes point the dials.','noise exists in training, but gradients are computed, not random.']},
+   {q:'“Attention lets each position attend to relevant context.” In cast terms…',
+    opts:['every position reads everything equally','ask matches tag, focus follows content, cargo flows in','the machine looks ahead at letters to come'],
+    key:1,why:['equal reading is exactly what focus is not — the shares are computed, and sharp.','query · key · value, as you watched, live, at 100% on the pair.','the mask forbids the future — bets must be honest.']},
+   {q:'“It aces training data but bombs the eval set.” Diagnosis?',
+    opts:['overfitting — memorizing its book; the gap is the tell','the step size melted it','it needs a hotter temperature'],
+    key:0,why:['the memorizing gap, seen on the counter and in the control room.','melting shows as an exploding curve, not a gap.','temperature is a serving knob — it cannot fix training.']},
+   {q:'“Sampling at temperature 0.” You expect…',
+    opts:['the most creative text','the top bet every time — and a real risk of loops','random letters'],
+    key:1,why:['coldest is the least creative setting there is.','greedy, as your loop detector caught — period 33, remember.','random is what very hot temperature approaches.']},
+   {q:'“The base model was then instruction-tuned.” That means…',
+    opts:['a bigger alphabet was added','the babbler got a short second school on ask-tell pages','the dials were frozen forever'],
+    key:1,why:['the pieces stay put after school.','job training — you ran it, and the format held on questions it never saw.','tuning is exactly dials moving again, gently.']}
+  ],right=>{
+    if(right>=5){
+      bossPass(8);
+      $('b8q').innerHTML='<div class="verdict"><b>'+right+'/6 — the table is yours.</b></div>'
+        +'<div class="inspect"><b>your field notes</b><br>'+SAVE.notes.filter(Boolean).map((n,i)=>(i+1)+'. '+n).join('<br>')+'</div>'
+        +'<div class="cap">where to go from here: replay the control room and the serving window — they stay open. and the next time someone says loss, gradient, attention, token, or overfit — you have run every one of those words with your own hands.</div>';
+    }
+    else $('b8q').innerHTML='<div class="verdict"><i>'+right+'/6.</i> the codex is the study guide. retry from the map.</div>';
+  });
+  wireChrome(el);
+ });
+
+// ---------- home ----------
+function homeScreen(){
+  const el=$('stage');
+  const ua=unlockedAct();
+  let h='<div id="prog">stars <b>'+starCount()+'/17</b> · bosses <b>'+bossesPassed()+'/8</b>'
+    +(SAVE.ladder.machine?' · your machine on the ladder: <b>'+f2(SAVE.ladder.machine)+'</b>':'')+'</div>';
+  if(bossesPassed()===0&&starCount()===0){
+    h+='<div id="goal">Eight acts. You start as the machine, and end able to <b>talk shop</b>.'
+      +'<span class="sub">everything here trains and runs live on this phone — nothing is canned, every number is measured in front of you.</span></div>';
+  }
+  for(const a of ACTS){
+    const locked=a.n>ua;
+    const stars=a.missions.map(m=>SAVE.stars[m]?'★':'☆').join('');
+    const bossDone=!!SAVE.boss['b'+a.n];
+    h+='<div class="act'+(locked?' lock':'')+(bossDone?' done':'')+'" data-a="'+a.n+'">'
+      +'<div class="an">act '+a.n+(bossDone?' · cleared':locked?' · locked':'')+'</div>'
+      +'<div class="at"><b>'+a.title+'</b></div>'
+      +'<div class="stars">'+stars+' <span>'+(bossDone?'⚑':locked?'':'· boss waits')+'</span></div>'
+      +(locked?'':'<div class="chips" style="padding-top:8px">'
+        +a.missions.map((m,i)=>'<button data-go="'+m+'" class="'+(SAVE.stars[m]?'good':'')+'">'+(i+1)+' · '+MISSIONS[m].title+'</button>').join('')
+        +'<button data-go="b'+a.n+'" class="'+(bossDone?'good':'')+'">boss</button></div>')
+      +'</div>';
+  }
+  if(SAVE.notes.filter(Boolean).length)
+    h+='<div class="inspect"><b>field notes</b><br>'+SAVE.notes.filter(Boolean).map((n,i)=>(i+1)+'. '+n).join('<br>')+'</div>';
+  el.innerHTML=h;
+  wireNav(el);
+}
+
+// ---------- router ----------
+let CUR={screen:'home',param:null};
+function go(screen,param){
+  if(TRAIN){ toast('training — stop it first, top right of the bar'); return; }
+  CUR={screen,param};
+  const el=$('stage');
+  if(screen==='home') homeScreen();
+  else if(screen==='codex') codexScreen();
+  else if(screen==='mission'){
+    const m=MISSIONS[param];
+    if(!m||m.act>unlockedAct()){ toast('locked — clear the boss before it'); homeScreen(); return; }
+    m.render(el);
+  }
+  else if(screen==='boss'){
+    const b=BOSSES[param];
+    if(!b||param>unlockedAct()){ toast('locked'); homeScreen(); return; }
+    b.render(el);
+  }
+  try{ window.scrollTo(0,0); }catch(e){}
+}
+$('homeBtn').addEventListener('pointerdown',()=>go('home'));
+$('codexBtn').addEventListener('pointerdown',()=>go('codex'));
+$('homeT').addEventListener('pointerdown',()=>go('home'));
+go('home');
+
+// ---------- exposed for the harness ----------
+window.MX={VOCAB,NV,IDX,UNIFORM_SURPRISE,rngOf,BASE_BOOK,SPLIT,DRILLS,QA_BOOK,DRILL_FILL,drillPrompt,
+  countTable,rowTotal,counterSurprise,counterBets,counterBabble,longestCopyBase,
+  makeParams:makeParams,adamStep,paramCount,zeroGrads,
+  makeLM,lmForward,lmBackward,lmStep,lmSurprise,lmBets,lmSample,reshapeBets,findLoop,
+  makeBigramNet,bigramStep,bigramSurprise,bigramBets,
+  makeBottleneck,bottleneckStep,bottleneckSurprise,bottleneckBets,
+  makeWindow,windowStep,windowSurprise,windowBets,windowBabble,echoScore,
+  bpeInit,bpePairCounts,bpeMergeStep,bpePieceCount,
+  vecOf,dist,nearest,vowelClustering,headProfile,echoFocus,gradCheck,pca2,wordRate,
+  handBetSurprise,runDoctor,snapParams,restoreParams,
+  MISSIONS,BOSSES,ACTS,CODEX,FIELD_NOTES,RECIPE,MODELS,SNAPS,
+  SAVE:()=>SAVE,award,bossPass,go,unlockedAct,setLadder,runTrainSync,
+  gauss,levelFwd:typeof levelFwd!=='undefined'?levelFwd:null};
+})();
+</script>
+</body>
+</html>
