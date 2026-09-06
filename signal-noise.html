@@ -33,6 +33,9 @@
     padding:9px 4px;border-radius:10px;cursor:pointer;white-space:nowrap}
   .pills button.on{color:var(--lamp);border-color:rgba(240,184,90,.6)}
   #chart{flex:1;min-height:150px;border:1px solid var(--line);border-radius:14px;width:100%;touch-action:none}
+  #app.voices #chart{flex:1 1 auto;height:196px;min-height:110px}
+  #app.voices .sliders{max-height:24vh}
+  #app.voices #chips{padding:6px 2px 0}
   #chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 2px 0}
   .chip{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:6px 9px;
     font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
@@ -41,10 +44,11 @@
     text-transform:uppercase;padding:7px 4px 0;min-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #cap b{font-weight:600;color:var(--lamp)}
   #cap i{font-style:normal;color:var(--rose)}
-  #vlog{display:none;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;line-height:1.75;
+  #vlog{display:none;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px;line-height:1.5;
     color:var(--ink);border:1px solid var(--line);border-radius:12px;background:var(--panel);
-    padding:9px 12px;margin-top:8px;min-height:96px}
+    padding:8px 12px;margin-top:8px;height:104px;overflow:hidden;flex:0 0 auto}
   #vlog.on{display:block}
+  #vlog div{margin-bottom:5px}
   #vlog .who{color:var(--mute)} #vlog .dim{color:var(--mute)}
   #vrow{display:none;gap:7px;padding-top:8px}
   #vrow.on{display:flex}
@@ -273,7 +277,7 @@
       const p = V.procs[w];
       V.log.unshift({ who:p.name, col:p.col, say:p.voices[p.vi % p.voices.length], t:V.t });
       p.vi++; V.last = w;
-      if (V.log.length > 6) V.log.length = 6;
+      if (V.log.length > 3) V.log.length = 3;
     }
     return w;
   }
@@ -351,12 +355,13 @@
     const load = lifeLoad(V.day);
     cc.fillStyle = '#090a10'; cc.fillRect(0,0,CW,CH);
     const n = V.procs.length;
-    const top = 30, rowH = Math.min(30, (CH-top-10)/n);
+    const top = 38, rowH = (CH - top - 8)/n;
     let w = 0; for (let i=1;i<n;i++) if (V.procs[i].a > V.procs[w].a) w = i;
     cc.fillStyle = COL.mute; cc.font = '10px ui-monospace,Menlo,monospace';
-    cc.fillText(`CONTEXT ${V.ctx.toUpperCase()}  ·  CARRIED LOAD ${load.toFixed(2)} (from the life layer, day ${V.day})`, 10, 14);
-    cc.fillStyle = COL.lamp;
-    cc.fillText('▸ SPOTLIGHT: ' + V.procs[w].name.toUpperCase(), 10, 26);
+    cc.font = '9.5px ui-monospace,Menlo,monospace';
+    cc.fillText(`CONTEXT ${V.ctx.toUpperCase()}  ·  CARRIED LOAD ${load.toFixed(2)}  ·  LIFE DAY ${V.day}`, 10, 13);
+    cc.fillStyle = COL.lamp; cc.font = '11px ui-monospace,Menlo,monospace';
+    cc.fillText('▸ ' + V.procs[w].name.toUpperCase(), 10, 29);
     for (let i = 0; i < n; i++) {
       const p = V.procs[i], y = top + i*rowH + rowH*0.5;
       const bw = Math.max(2, Math.min(1, p.a/1.4) * (CW - 150));
@@ -450,9 +455,10 @@
   }
   function syncVoicesUI() {
     const on = scene === 'voices';
+    $('app').classList.toggle('voices', on);
     $('vlog').classList.toggle('on', on);
     $('vrow').classList.toggle('on', on);
-    chart.style.display = '';
+    resize();                                   // chart height changes with the scene
     if (on && !raf) { lastMs = performance.now(); raf = requestAnimationFrame(loop); }
   }
   document.querySelectorAll('#scenes button').forEach(b => b.addEventListener('click', () => {
