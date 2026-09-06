@@ -41,6 +41,19 @@
     text-transform:uppercase;padding:7px 4px 0;min-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #cap b{font-weight:600;color:var(--lamp)}
   #cap i{font-style:normal;color:var(--rose)}
+  #vlog{display:none;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;line-height:1.75;
+    color:var(--ink);border:1px solid var(--line);border-radius:12px;background:var(--panel);
+    padding:9px 12px;margin-top:8px;min-height:96px}
+  #vlog.on{display:block}
+  #vlog .who{color:var(--mute)} #vlog .dim{color:var(--mute)}
+  #vrow{display:none;gap:7px;padding-top:8px}
+  #vrow.on{display:flex}
+  #vrow button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    font:inherit;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;
+    padding:12px 6px;border-radius:12px;flex:1;min-height:44px;cursor:pointer}
+  #vrow button.on{border-color:rgba(240,184,90,.7);color:var(--lamp)}
+  .namein{width:100%;background:#0d0f16;border:1px solid var(--line);color:var(--ink);
+    font:inherit;font-size:12px;border-radius:8px;padding:7px 8px;margin:3px 0}
   #dock{padding-top:8px}
   .sliders{display:none;padding:8px 10px 6px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:8px;max-height:36vh;overflow:auto}
   .sliders.on{display:block}
@@ -85,10 +98,17 @@
   <div class="pills" id="scenes">
     <button data-s="move" class="on">The Move</button>
     <button data-s="cold">The Cold Shoulder</button>
+    <button data-s="voices">Inner Voices</button>
     <button data-s="sandbox">Sandbox</button>
   </div>
   <canvas id="chart"></canvas>
   <div id="chips"></div>
+  <div id="vlog"></div>
+  <div id="vrow">
+    <button id="vSuppress">push it down</button>
+    <button id="vFinish">let it finish</button>
+    <button id="vPlay" class="on">pause</button>
+  </div>
   <div id="cap">—</div>
   <div id="dock">
     <div class="sliders" id="s-move">
@@ -104,6 +124,11 @@
       <label class="slider">the insult stings<input type="range" id="c-sting" min="0" max="8" value="4"><output id="oc-sting">4</output></label>
       <label class="slider">sting memory (days)<input type="range" id="c-tau" min="1" max="14" value="3"><output id="oc-tau">3</output></label>
       <label class="slider">go cold for (days)<input type="range" id="c-cold" min="0" max="30" value="14"><output id="oc-cold">14</output></label>
+    </div>
+    <div class="sliders" id="s-voices">
+      <label class="slider">life-layer day<input type="range" id="v-day" min="0" max="364" value="55"><output id="ov-day">55</output></label>
+      <label class="slider">speed<input type="range" id="v-speed" min="1" max="8" value="3"><output id="ov-speed">3</output></label>
+      <div id="v-names"></div>
     </div>
     <div class="sliders" id="s-sandbox"></div>
     <div class="row">
@@ -172,6 +197,86 @@
   const SHAPES = ['off','boost that fades','builds to a day','shock','rhythm'];
   const shocks = { move:[], cold:[], sandbox:[] };   // {t0, A}
   const off = { move:new Set(), cold:new Set(), sandbox:new Set() };
+
+  // ---------- inner voices: processes bidding for one spotlight ----------
+  // Global Workspace (Baars/Dehaene): many parallel processes, one narrow broadcast.
+  // Tactics are published behavioural signatures, not anatomy:
+  //   zeigarnik  — unfinished business keeps bidding until completed
+  //   replay     — social rehearsal, cue-driven
+  //   threat     — anticipatory, spikes on context
+  //   anchor     — positive, quiet, steady
+  //   undertow   — slow-reservoir rumination, fed by the LIFE layer
+  const CTXS = ['3am', 'at work', 'on the beach'];
+  const VDEF = [
+    { name:'the unfinished thing', tactic:'zeigarnik', col:COL.lamp,  base:0.42, loadSens:0.25, tau:2.2, ironic:1.5,
+      cue:{ '3am':0.35, 'at work':0.55, 'on the beach':0.10 },
+      voices:['you never finished that', 'it is still sitting there', 'one more open loop', 'that thing. still.'] },
+    { name:'replaying it', tactic:'replay', col:COL.violet, base:0.34, loadSens:0.30, tau:2.8, ironic:1.6,
+      cue:{ '3am':0.50, 'at work':0.30, 'on the beach':0.15 },
+      voices:['what you should have said', 'run it again, differently', 'they must have thought —', 'say it better this time'] },
+    { name:'what could go wrong', tactic:'threat', col:COL.rose, base:0.30, loadSens:0.35, tau:1.6, ironic:1.7,
+      cue:{ '3am':0.65, 'at work':0.40, 'on the beach':0.12 },
+      voices:['and then what', 'it could still fall apart', 'you are not ready for that', 'check it again'] },
+    { name:'something good', tactic:'anchor', col:COL.teal, base:0.30, loadSens:-0.20, tau:4.0, ironic:0.4,
+      cue:{ '3am':0.08, 'at work':0.15, 'on the beach':0.60 },
+      voices:['this part is fine', 'you built that', 'warm, actually', 'nothing needed right now'] },
+    { name:'the undertow', tactic:'undertow', col:COL.blue, base:0.30, loadSens:1.10, tau:6.0, ironic:1.4,
+      cue:{ '3am':0.45, 'at work':0.18, 'on the beach':0.22 },
+      voices:['under everything', 'still carrying it', 'heavier today', 'it has not gone anywhere'] },
+  ];
+  const V = { t:0, ctx:'3am', lever:null, target:null, playing:true, speed:3, day:55,
+    procs:null, log:[], last:-1, seed:12345, spotTime:null };
+  function vReset(keepNames) {
+    const names = keepNames && V.procs ? V.procs.map(p=>p.name) : null;
+    V.procs = VDEF.map((d,i) => Object.assign({}, d, { name: names?names[i]:d.name,
+      a:0.1, press:0, done:0, wins:0, vi:0, held:false }));
+    V.t = 0; V.log = []; V.last = -1; V.seed = 12345; V.lever = null; V.target = null;
+    V.spotTime = new Float64Array(VDEF.length);
+  }
+  vReset(false);
+  const PRESS_TAU = 26, PRESS_MAX = 0.9, SUPPRESS_KNOCK = 0.55, SUPPRESS_GAIN = 0.55, FINISH_RATE = 0.30;
+  function vrnd(){ V.seed = (V.seed*1664525 + 1013904223) >>> 0; return V.seed/4294967296; }
+  // the bridge: carried load is read straight off the slow life layer
+  function lifeLoad(day) {
+    const fs = factorsMove(); let s = 0;
+    for (const f of fs) s += f.y[Math.max(0, Math.min(DAYS-1, day|0))];
+    for (const sh of shocks.move) { const py = pulse(sh.t0, sh.A, 4); s += py[Math.max(0,Math.min(DAYS-1,day|0))]; }
+    return Math.max(0, Math.min(1.5, -s/4));
+  }
+  const HELD_GATE = 0.15;   // held-down pressure cannot express until you let go
+  function vDrive(p, load) {
+    return p.base*(1 + load*p.loadSens) + p.cue[V.ctx]
+         + p.press*p.ironic*(p.held ? HELD_GATE : 1);
+  }
+  function vTick(dt, load) {
+    for (const p of V.procs) {
+      const target = Math.max(0, vDrive(p, load)) * (1 - p.done);
+      p.a += (target - p.a) * (dt/p.tau) + (vrnd()-0.5)*0.02*dt;
+      p.a = Math.max(0, Math.min(2, p.a));
+      p.press = Math.min(PRESS_MAX, p.press*Math.exp(-dt/PRESS_TAU));
+    }
+    let w = 0; for (let i=1;i<V.procs.length;i++) if (V.procs[i].a > V.procs[w].a) w = i;
+    const win = V.procs[w];
+    for (const p of V.procs) p.held = false;
+    if (!V.lever) V.target = null;
+    else if (V.target === null) V.target = w;          // grabs whatever held the spotlight
+    const tg = V.lever && V.target !== null ? V.procs[V.target] : null;
+    if (tg && V.lever === 'suppress') { tg.a *= (1 - SUPPRESS_KNOCK*dt); tg.press = Math.min(PRESS_MAX, tg.press + SUPPRESS_GAIN*dt); tg.held = true; }
+    else if (tg && V.lever === 'finish') { tg.done = Math.min(0.95, tg.done + FINISH_RATE*dt); tg.press *= Math.exp(-dt/6); }
+    V.spotTime[w] += dt; win.wins++;
+    V.t += dt;
+    return w;
+  }
+  function vStep(dt, load) {
+    const w = vTick(dt, load);
+    if (w !== V.last) {
+      const p = V.procs[w];
+      V.log.unshift({ who:p.name, col:p.col, say:p.voices[p.vi % p.voices.length], t:V.t });
+      p.vi++; V.last = w;
+      if (V.log.length > 6) V.log.length = 6;
+    }
+    return w;
+  }
 
   // ---------- scene computation ----------
   function factorsMove() {
@@ -242,7 +347,44 @@
       cc.beginPath(); cc.moveTo(X(t), 8); cc.lineTo(X(t), CH-14); cc.stroke();
     }
   }
+  function renderVoices() {
+    const load = lifeLoad(V.day);
+    cc.fillStyle = '#090a10'; cc.fillRect(0,0,CW,CH);
+    const n = V.procs.length;
+    const top = 30, rowH = Math.min(30, (CH-top-10)/n);
+    let w = 0; for (let i=1;i<n;i++) if (V.procs[i].a > V.procs[w].a) w = i;
+    cc.fillStyle = COL.mute; cc.font = '10px ui-monospace,Menlo,monospace';
+    cc.fillText(`CONTEXT ${V.ctx.toUpperCase()}  ·  CARRIED LOAD ${load.toFixed(2)} (from the life layer, day ${V.day})`, 10, 14);
+    cc.fillStyle = COL.lamp;
+    cc.fillText('▸ SPOTLIGHT: ' + V.procs[w].name.toUpperCase(), 10, 26);
+    for (let i = 0; i < n; i++) {
+      const p = V.procs[i], y = top + i*rowH + rowH*0.5;
+      const bw = Math.max(2, Math.min(1, p.a/1.4) * (CW - 150));
+      cc.fillStyle = p.col + (i===w ? 'ff' : '66');
+      cc.fillRect(120, y-6, bw, 12);
+      if (i === w) { cc.strokeStyle = COL.lamp; cc.lineWidth = 1.2; cc.strokeRect(118, y-8, bw+4, 16); }
+      cc.fillStyle = i===w ? COL.ink : COL.mute;
+      cc.font = '10.5px ui-monospace,Menlo,monospace';
+      const nm = p.name.length > 17 ? p.name.slice(0,16)+'\u2026' : p.name;
+      cc.fillText(nm, 8, y+4);
+      cc.fillStyle = COL.mute; cc.font = '9px ui-monospace,Menlo,monospace';
+      let tag = p.tactic;
+      if (p.press > 0.05) tag += ` · pressed ${p.press.toFixed(2)}`;
+      if (p.done > 0.02) tag += ` · done ${(p.done*100)|0}%`;
+      cc.fillText(tag, 124 + bw + 6, y+3);
+    }
+    const el = $('vlog');
+    let h = V.log.length ? '' : '<span class="dim">running… voices appear as processes win the spotlight</span>';
+    for (const L of V.log) h += `<div><span class="who" style="color:${L.col}">${L.who}</span> <span class="dim">· ${L.t.toFixed(0)}s</span><br>“${L.say}”</div>`;
+    el.innerHTML = h;
+    const tot = V.spotTime.reduce((a,b)=>a+b,0) || 1;
+    let top1 = 0; for (let i=1;i<n;i++) if (V.spotTime[i] > V.spotTime[top1]) top1 = i;
+    cap.innerHTML = `${V.t.toFixed(0)}s · spotlight share — <b>${V.procs[top1].name} ${((V.spotTime[top1]/tot)*100)|0}%</b>`
+      + (V.lever && V.target !== null ? ` · <i>${V.lever === 'suppress' ? 'holding down' : 'finishing'}: ${V.procs[V.target].name}</i>` : '');
+    renderChips(CTXS.map(c=>({name:c, col: c===V.ctx?COL.lamp:COL.mute})), false, 'ctx');
+  }
   function render() {
+    if (scene === 'voices') { renderVoices(); return; }
     frame();
     const shockY = shockCurve(scene);
     if (scene === 'cold') {
@@ -270,8 +412,19 @@
       renderChips(fs.map(f=>({name:f.name,col:f.col})), false);
     }
   }
-  function renderChips(items, readonly) {
+  function renderChips(items, readonly, mode) {
     const box = $('chips'); box.innerHTML = '';
+    if (mode === 'ctx') {
+      items.forEach(it => {
+        const c = document.createElement('button');
+        c.className = 'chip' + (it.name === V.ctx ? '' : ' off');
+        c.style.color = it.col; c.style.borderColor = it.col+'55';
+        c.textContent = it.name;
+        c.addEventListener('click', () => { V.ctx = it.name; render(); toast(`context: ${it.name} — different cues, different winners`); });
+        box.appendChild(c);
+      });
+      return;
+    }
     items.forEach((it, i) => {
       const c = document.createElement('button');
       c.className = 'chip' + (!readonly && off[scene].has(i) ? ' off' : '');
@@ -287,8 +440,24 @@
   }
 
   // ---------- wiring ----------
+  let raf = null, lastMs = 0;
+  function loop(ms) {
+    if (scene !== 'voices') { raf = null; return; }
+    const dt = Math.min(0.12, (ms - lastMs)/1000) * V.speed;
+    lastMs = ms;
+    if (V.playing) { vStep(dt, lifeLoad(V.day)); render(); }
+    raf = requestAnimationFrame(loop);
+  }
+  function syncVoicesUI() {
+    const on = scene === 'voices';
+    $('vlog').classList.toggle('on', on);
+    $('vrow').classList.toggle('on', on);
+    chart.style.display = '';
+    if (on && !raf) { lastMs = performance.now(); raf = requestAnimationFrame(loop); }
+  }
   document.querySelectorAll('#scenes button').forEach(b => b.addEventListener('click', () => {
     scene = b.dataset.s;
+    syncVoicesUI();
     document.querySelectorAll('#scenes button').forEach(x => x.classList.toggle('on', x === b));
     document.querySelectorAll('.sliders').forEach(x => x.classList.toggle('on', x.id === 's-'+scene && $('dialBtn').classList.contains('on')));
     render();
@@ -335,15 +504,45 @@
   }
   buildSandbox();
 
+  function setLever(which) {
+    V.lever = (V.lever === which) ? null : which;
+    V.target = null;
+    $('vSuppress').classList.toggle('on', V.lever === 'suppress');
+    $('vFinish').classList.toggle('on', V.lever === 'finish');
+    if (!V.lever) { V.target = null; toast('lever released'); return; }
+    const nm = V.target !== null ? V.procs[V.target].name : 'whatever is in the spotlight';
+    if (V.lever === 'suppress') toast(`holding down “${nm}” — quiet now; watch what it costs when you let go (Wegner 1987)`, 3400);
+    if (V.lever === 'finish') toast(`letting “${nm}” complete — unfinished things keep bidding (Zeigarnik 1927)`, 3400);
+  }
+  $('vSuppress').addEventListener('click', () => setLever('suppress'));
+  $('vFinish').addEventListener('click', () => setLever('finish'));
+  $('vPlay').addEventListener('click', e => { V.playing = !V.playing;
+    e.currentTarget.textContent = V.playing ? 'pause' : 'play';
+    e.currentTarget.classList.toggle('on', V.playing); });
+  bind('v-day','ov-day', ()=>0, v=>V.day=v, v=>v);
+  bind('v-speed','ov-speed', ()=>0, v=>V.speed=v, v=>v);
+  function buildNames() {
+    const box = $('v-names'); box.innerHTML = '<div style="color:var(--mute);font-size:11px;padding:6px 0 2px">name them yourself — these are placeholders, not a reading of you</div>';
+    V.procs.forEach((p, i) => {
+      const inp = document.createElement('input');
+      inp.className = 'namein'; inp.value = p.name; inp.setAttribute('aria-label','process '+(i+1));
+      inp.addEventListener('input', e => { V.procs[i].name = e.target.value || VDEF[i].name; render(); });
+      box.appendChild(inp);
+    });
+  }
+  buildNames();
   $('sumOnly').addEventListener('click', e => { sumOnly = !sumOnly; e.currentTarget.classList.toggle('on', sumOnly); render(); });
   $('dialBtn').addEventListener('click', e => {
     const on = e.currentTarget.classList.toggle('on');
     document.querySelectorAll('.sliders').forEach(x => x.classList.toggle('on', on && x.id === 's-'+scene));
   });
-  $('reset').addEventListener('click', () => { shocks[scene].length = 0; off[scene].clear(); render(); toast('scene reset'); });
+  $('reset').addEventListener('click', () => {
+    if (scene === 'voices') { vReset(true); $('vSuppress').classList.remove('on'); $('vFinish').classList.remove('on'); render(); toast('voices reset · names kept'); return; }
+    shocks[scene].length = 0; off[scene].clear(); render(); toast('scene reset'); });
 
   // tap the chart = life happens (a shock at that day, sized & signed by where you tap)
   chart.addEventListener('pointerdown', e => {
+    if (scene === 'voices') return;
     const r = chart.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
     const t0 = Math.round(Math.max(0, Math.min(DAYS-1, (x-10)/(CW-20)*(DAYS-1))));
@@ -363,6 +562,11 @@
     <p>A <b>signal</b> is slow and load-bearing: it persists, you must maintain it, and it moves only with sustained input (warmth in a relationship, health, craft). <b>Noise</b> is fast and mean-reverting: it arrives loud and decays in days (an insult, a bad commute, a great party). The operational law this sketchpad keeps teaching: <b>never answer fast noise with slow-variable changes.</b> The Cold Shoulder scene prices that mistake.</p>
     <h2>the science this leans on</h2>
     <p class="src">Hedonic adaptation: big life changes fade toward baseline (Brickman &amp; Campbell 1971; Diener). Impact bias: we overestimate how long future feelings will last (Gilbert &amp; Wilson) — the adaptation slider is the antidote. Commuting is unusually adaptation-resistant (Stutzer &amp; Frey, the "commuting paradox") — which is why the commute factor keeps 85% of its effect while home-joy fades. Judging by the 12-month integral rather than day-one feeling is Kahneman's experienced-utility move. The whole approach — simple stocks, flows and delays because minds can't integrate them — is system dynamics (Forrester 1961; Meadows, <i>Thinking in Systems</i>).</p>
+    <h2>inner voices — the fast layer</h2>
+    <p>Same engine, faster clock. Several <b>processes</b> run in parallel, each with an activation level that rises and falls; only one at a time reaches the <b>spotlight</b> and becomes a thought you hear. Frequency of a voice = how hard that process is bidding.</p>
+    <p><b>These are processes, not brain regions.</b> There is no logic area and no emotion area — no lizard brain, no left/right split. Those are pop-neuroscience and they are false. What compete are distributed, overlapping processes with no fixed address, which is also why a process can be about a deadline, a person, or a song.</p>
+    <p>Two levers, both real signatures: <b>push it down</b> knocks the winner out of the spotlight now but charges its pressure, and it returns louder — Wegner's <i>ironic process</i> (1987). <b>Let it finish</b> raises its completion, and its bidding decays — the <i>Zeigarnik effect</i> (1927): unfinished business keeps knocking. Context changes which cues fire (spreading activation). And <b>carried load</b> is read straight off the slow life layer at the day you choose — a deficit in The Move raises the baseline bid of the load-sensitive processes. That is the bridge: an ordinary Tuesday is loud because a slow stock is heavy underneath it.</p>
+    <p class="src">Global workspace — parallel processing, one narrow broadcast (Baars 1988; Dehaene 2014). Ironic process theory (Wegner 1987). Zeigarnik (1927). Spreading activation (Collins &amp; Loftus 1975). Rumination as a stable attractor (Nolen-Hoeksema). <b>Same honesty rule as the rest of this page:</b> the mechanisms are published, the numbers are <i>yours</i> — rename the processes and set the dials. It watches dynamics; it does not read your mind, and it is not a substitute for working something through with a person.</p>
     <h2>controls</h2>
     <p>Dials shape each factor. Chips toggle factors in and out of the sum. <b>Tap the chart</b> to drop a life surprise at that day — height sets how good or bad. Sum only hides the components. Reset clears shocks and toggles for the scene.</p>`;
   $('infoBtn').addEventListener('click', () => { $('infoBody').innerHTML = MANUAL; $('info').classList.add('on'); });
@@ -372,7 +576,9 @@
   document.querySelectorAll('.sliders').forEach(x => x.classList.toggle('on', x.id === 's-move'));
   resize();
   toast('tap chart = life happens · chips remove a factor · ⓘ for what this is (and is not)', 3400);
-  window.LAB = { P, factorsMove, coldRuns, factorsSandbox, integral, shocks, render };
+  window.LAB = { P, factorsMove, coldRuns, factorsSandbox, integral, shocks, render,
+    V, VDEF, CTXS, vReset, vTick, vStep, vDrive, lifeLoad, renderVoices,
+    setScene: s => { scene = s; }, getScene: () => scene };
 })();
 </script>
 </body>
